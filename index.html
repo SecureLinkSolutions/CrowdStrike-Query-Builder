@@ -182,8 +182,8 @@
   <div class="col">
     <section aria-labelledby="in-h">
       <h2 id="in-h">Indicators</h2>
-      <p class="hint">Paste rows straight from an IOC sheet (a type column like IP, URI, File or SHA256 is used when present) or free text. Defanging such as <code>[.]</code>, <code>(dot)</code>, <code>hxxp</code> and <code>[:]</code> is undone automatically.</p>
-      <textarea id="input" spellcheck="false" aria-label="Indicators" placeholder="TLP:AMBER  IP  203[.]0[.]113[.]10&#10;TLP:AMBER  URI /vpn/scripts/update.deb&#10;hxxps://bad-update[.]example/payload&#10;198.51.100.0/24"></textarea>
+      <p class="hint">Paste indicators in any format: one per line, spreadsheet rows or free text. If rows include a type column, it is used. Common defanging is undone automatically.</p>
+      <textarea id="input" spellcheck="false" aria-label="Indicators" placeholder="One indicator per line, or paste rows and free text&#10;203[.]0[.]113[.]10&#10;hxxps://example[.]com/path&#10;198.51.100.0/24"></textarea>
       <div class="actions">
         <button type="button" id="example">Load example</button>
         <button type="button" id="clear">Clear</button>
@@ -193,7 +193,7 @@
         <summary>Advisory details</summary>
         <div class="inner grid2">
           <label for="source">Source</label>
-          <input type="text" id="source" placeholder="Citrix NetScaler, Sept 2026">
+          <input type="text" id="source" placeholder="Advisory or report name">
           <label for="tlp">TLP</label>
           <select id="tlp">
             <option>TLP:CLEAR</option>
@@ -203,7 +203,7 @@
             <option>TLP:RED</option>
           </select>
         </div>
-        <p class="hint" style="margin-top:8px">TLP is picked up from the pasted text when a marking is found.</p>
+        <p class="hint" style="margin-top:8px">Detected from the pasted text when a TLP marking is present.</p>
       </details>
 
       <details>
@@ -217,15 +217,15 @@
       <details>
         <summary>Allowlist</summary>
         <div class="inner">
-          <p class="hint">Anything here is removed before queries are built. IPs, CIDR ranges, domains (subdomains included), hashes, paths and file names all work. Kept in this page only, unless you save a session.</p>
-          <textarea id="allowlist" spellcheck="false" aria-label="Allowlist" placeholder="Your egress IPs, scanners, CDN ranges&#10;10.0.0.0/8&#10;/libexec/mod_proxy.so"></textarea>
+          <p class="hint">Indicators listed here are removed before queries are built. Domains also cover their subdomains, and ranges cover every address inside them.</p>
+          <textarea id="allowlist" spellcheck="false" aria-label="Allowlist" placeholder="One per line: IPs, ranges, domains, hashes, paths or file names"></textarea>
         </div>
       </details>
 
       <details id="sessions-box">
         <summary>Saved sessions</summary>
         <div class="inner">
-          <p class="hint">Off by default. When on, sessions are stored in this browser's local storage on this device only, and are never sent anywhere. Turning it off deletes them.</p>
+          <p class="hint">Off by default. Sessions are stored in this browser only and never sent anywhere. Turning this off deletes them.</p>
           <label class="check"><input type="checkbox" id="optin"> Allow saving sessions in this browser</label>
           <div class="actions">
             <button type="button" id="save" disabled>Save current session</button>
@@ -256,7 +256,7 @@
       </div>
 
       <div role="tabpanel" id="p-hunt" aria-labelledby="tab-hunt">
-        <p class="hint">Unfielded match against the raw event, across every repo and parser. IPs are digit-bounded so 10.0.0.1 never hits 10.0.0.15, and CIDR ranges are expanded into exact regex. Hashes, paths and file names match case-insensitively.</p>
+        <p class="hint">Matches the raw event text in any repo or data source. IP matches are exact, and ranges, hashes, paths and file names are handled automatically.</p>
         <textarea id="hunt-out" readonly spellcheck="false" aria-label="Hunt query"></textarea>
         <div class="actions">
           <button type="button" class="primary" data-copy="hunt-out">Copy query</button>
@@ -265,7 +265,7 @@
       </div>
 
       <div role="tabpanel" id="p-field" aria-labelledby="tab-field" hidden>
-        <p class="hint">Exact field matching inside a <code>case</code> block, which tags each hit with <code>ioc_type</code> and <code>ioc_field</code>. Faster and quieter than the hunt query when you know where each indicator lives. Set the fields under Field mapping.</p>
+        <p class="hint">Matches specific fields and tags each hit with the indicator type and field. Choose the fields under Field mapping.</p>
         <textarea id="field-out" readonly spellcheck="false" aria-label="Fielded query"></textarea>
         <div class="actions">
           <button type="button" class="primary" data-copy="field-out">Copy query</button>
@@ -274,7 +274,7 @@
       </div>
 
       <div role="tabpanel" id="p-lookup" aria-labelledby="tab-lookup" hidden>
-        <p class="hint">Upload the CSV under Next-Gen SIEM, Lookup files, then run the query. Updating the IOC set is a re-upload; saved searches and correlation rules pick it up. <code>match()</code> is exact, so subdomain, path and file-in-path matching stay in the other two queries.</p>
+        <p class="hint">Upload the CSV as a lookup file, then run the query. Lookups use exact matching, so paths and file names are covered by the other queries.</p>
         <div class="grid2">
           <label for="lookup-name">File name</label>
           <input type="text" id="lookup-name" class="mono" spellcheck="false">
@@ -307,9 +307,9 @@
       <details>
         <summary>Shape results</summary>
         <div class="inner">
-          <p class="hint">Applied to every query in the right order: extra filters first, then the output step.</p>
+          <p class="hint">Applied to every query: filters first, then the output format.</p>
           <label for="filters" style="font-size:.95rem">Extra filters, one per line</label>
-          <textarea id="filters" spellcheck="false" placeholder="Vendor.Action != deny&#10;event.action != &quot;flow_terminated&quot;"></textarea>
+          <textarea id="filters" spellcheck="false" placeholder="field != value"></textarea>
           <div class="grid2" style="margin-top:12px">
             <label for="agg">Output</label>
             <select id="agg">
@@ -322,9 +322,9 @@
             <label for="group-fields" data-for="group">Group by</label>
             <input type="text" id="group-fields" class="mono" data-for="group" value="#repo">
             <label for="collect-fields" data-for="group">Collect</label>
-            <input type="text" id="collect-fields" class="mono" data-for="group" placeholder="Vendor.Action, ComputerName">
+            <input type="text" id="collect-fields" class="mono" data-for="group" placeholder="field1, field2">
             <label for="tz" data-for="group">Time zone</label>
-            <input type="text" id="tz" class="mono" data-for="group" value="Australia/Hobart">
+            <input type="text" id="tz" class="mono" data-for="group" value="">
           </div>
         </div>
       </details>
@@ -332,12 +332,12 @@
       <details>
         <summary>Field mapping</summary>
         <div class="inner">
-          <p class="hint">Used by the fielded and lookup queries. Separate multiple fields with commas; leave a type blank to skip it.</p>
+          <p class="hint">Used by the fielded and lookup queries. Separate fields with commas, or leave a type blank to skip it.</p>
           <div class="grid2">
             <label for="preset">Preset</label>
             <select id="preset">
               <option value="falcon">Falcon endpoint telemetry</option>
-              <option value="ecs">Normalised (ECS) firewall, proxy, NetScaler</option>
+              <option value="ecs">Normalised (ECS) network and web logs</option>
               <option value="custom">Custom</option>
             </select>
           </div>
@@ -650,7 +650,7 @@
       blocks.push(['// ---- Hashes: ' + label + ' ----', '/(^|[^a-f0-9])(' + hashes.map(h => h.value).join('|') + ')([^a-f0-9]|$)/i']);
     }
     if (g.domain.length) {
-      blocks.push(['// ---- ' + g.domain.length + ' domain' + (g.domain.length === 1 ? '' : 's') + ', subdomains included ----', '/(^|[^a-z0-9-])(' + g.domain.map(d => reEsc(d.value)).join('|') + ')([^a-z0-9.-]|\\.([^a-z0-9-]|$)|$)/i']);
+      blocks.push(['// ---- ' + g.domain.length + ' domain' + (g.domain.length === 1 ? '' : 's') + ', subdomains included ----', '/(^|[^a-z0-9\\-])(' + g.domain.map(d => reEsc(d.value)).join('|') + ')([^a-z0-9.\\-]|\\.([^a-z0-9\\-]|$)|$)/i']);
     }
     if (g.url.length) {
       blocks.push(['// ---- ' + g.url.length + ' URL' + (g.url.length === 1 ? '' : 's') + ' ----', '/(' + g.url.map(u => reEsc(u.value)).join('|') + ')/i']);
@@ -666,7 +666,7 @@
       blocks.push(['// ---- ' + paths.length + ' path' + (paths.length === 1 ? '' : 's') + ' or URI' + (paths.length === 1 ? '' : 's') + ' ----', '/(' + paths.map(p => pathEsc(p.value)).join('|') + ')/i']);
     }
     if (g.filename.length) {
-      blocks.push(['// ---- ' + g.filename.length + ' file name' + (g.filename.length === 1 ? '' : 's') + ' (also match inside URIs and paths) ----', '/(^|[^\\w.-])(' + g.filename.map(f => pathEsc(f.value)).join('|') + ')([^\\w.-]|$)/i']);
+      blocks.push(['// ---- ' + g.filename.length + ' file name' + (g.filename.length === 1 ? '' : 's') + ' (also match inside URIs and paths) ----', '/(^|[^\\w.\\-])(' + g.filename.map(f => pathEsc(f.value)).join('|') + ')([^\\w.\\-]|$)/i']);
     }
     if (!blocks.length) return { text: '', notes };
     const lines = header(g, 'Raw-text match across @rawstring. Run across all repos, 30 days or more.');
@@ -1001,6 +1001,7 @@
     .forEach(id => $(id).addEventListener('input', render));
   ['sort', 'collapse'].forEach(id => $(id).addEventListener('change', render));
 
+  try { $('tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* leave blank */ }
   buildFieldMap();
   syncAgg();
   renderSessions();
