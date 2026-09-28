@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<title>IOC IP formatter for LogScale</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23B8740A'/><text x='16' y='22' font-family='monospace' font-size='16' text-anchor='middle' fill='white'>IP</text></svg>">
+<title>IOC query builder for Falcon NG-SIEM</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23B8740A'/><text x='16' y='22' font-family='monospace' font-size='14' text-anchor='middle' fill='white'>IOC</text></svg>">
 <style>
   :root {
     --bg: #E9EDF1;
@@ -18,6 +18,7 @@
     --amber-text: #8A5500;
     --amber-soft: #FBF1DE;
     --warn: #A33A2B;
+    --ok: #2F6B3F;
     --sans: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
     --mono: "IBM Plex Mono", "Cascadia Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
   }
@@ -32,6 +33,7 @@
       --amber-text: #F0B95C;
       --amber-soft: #33291A;
       --warn: #F08A7A;
+      --ok: #8BCB9A;
     }
   }
   * { box-sizing: border-box; }
@@ -43,7 +45,7 @@
     padding: clamp(16px, 4vw, 48px);
   }
   header {
-    max-width: 1200px;
+    max-width: 1320px;
     margin: 0 auto 28px;
     border-left: 6px solid var(--amber);
     padding-left: 18px;
@@ -55,17 +57,18 @@
     font-weight: 600;
     letter-spacing: -0.01em;
   }
-  header p { margin: 0; color: var(--muted); max-width: 68ch; }
+  header p { margin: 0; color: var(--muted); max-width: 72ch; }
   main {
-    max-width: 1200px;
+    max-width: 1320px;
     margin: 0 auto;
     display: grid;
     grid-template-columns: 1fr;
     gap: 20px;
   }
-  @media (min-width: 900px) {
-    main { grid-template-columns: 1fr 1fr; align-items: start; }
+  @media (min-width: 1000px) {
+    main { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; }
   }
+  .col { display: grid; gap: 20px; min-width: 0; }
   section {
     background: var(--surface);
     border: 1px solid var(--line);
@@ -75,46 +78,53 @@
   }
   h2 { font-size: 1.1rem; margin: 0 0 4px; font-weight: 600; }
   .hint { color: var(--muted); font-size: 0.9rem; margin: 0 0 12px; }
+  .hint code, li code { font-family: var(--mono); font-size: 0.85em; }
   textarea {
     width: 100%;
-    min-height: 300px;
     resize: vertical;
-    font: 14px/1.55 var(--mono);
+    font: 13.5px/1.55 var(--mono);
     color: var(--ink);
     background: var(--bg);
     border: 1px solid var(--line);
     border-radius: 6px;
     padding: 12px;
   }
-  textarea[readonly] { background: var(--amber-soft); border-color: var(--amber); }
+  #input { min-height: 320px; }
+  #allowlist { min-height: 110px; }
+  #filters { min-height: 70px; }
+  textarea[readonly] { background: var(--amber-soft); border-color: var(--amber); min-height: 340px; white-space: pre; overflow-x: auto; }
+  textarea.short[readonly] { min-height: 180px; }
   .row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 12px 0 0; }
   label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 0.95rem; cursor: pointer; }
   input[type=checkbox] { accent-color: var(--amber); width: 16px; height: 16px; }
-  input[type=text] {
-    font: 14px var(--mono);
+  input[type=text], select {
+    font: 14px var(--sans);
     color: var(--ink);
     background: var(--bg);
     border: 1px solid var(--line);
     border-radius: 6px;
     padding: 6px 10px;
     min-width: 0;
-    flex: 1 1 180px;
   }
+  input.mono { font-family: var(--mono); font-size: 13px; }
+  .grid2 { display: grid; grid-template-columns: max-content 1fr; gap: 8px 12px; align-items: center; }
+  .grid2 label { font-size: 0.95rem; }
   button {
-    font: 600 0.95rem var(--sans);
+    font: 600 0.92rem var(--sans);
     border-radius: 6px;
-    padding: 8px 14px;
+    padding: 7px 13px;
     cursor: pointer;
     border: 1px solid var(--line);
     background: var(--surface);
     color: var(--ink);
   }
+  button:disabled { opacity: .5; cursor: not-allowed; }
   button.primary { background: var(--amber); border-color: var(--amber); color: #1A1204; }
-  button:focus-visible, textarea:focus-visible, input:focus-visible, [role=tab]:focus-visible {
+  button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
     outline: 3px solid var(--amber);
     outline-offset: 2px;
   }
-  .tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--line); margin: 0 0 12px; }
+  .tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin: 0 0 12px; }
   [role=tab] {
     border: none;
     border-bottom: 3px solid transparent;
@@ -125,207 +135,875 @@
     font-weight: 500;
   }
   [role=tab][aria-selected=true] { color: var(--ink); border-bottom-color: var(--amber); font-weight: 600; }
-  .fieldrow { display: none; gap: 10px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
-  .fieldrow.show { display: flex; }
-  .fieldrow label { font-size: 0.95rem; }
-  .summary { font-size: 0.95rem; margin: 12px 0 0; }
-  .summary strong { font-variant-numeric: tabular-nums; }
-  .notes { margin: 8px 0 0; padding: 0; list-style: none; font-size: 0.9rem; }
-  .notes li { padding: 6px 10px; border-radius: 6px; margin-top: 6px; }
+  [role=tab]:focus-visible { outline-offset: -3px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+  .chip {
+    font: 500 0.88rem var(--sans);
+    border-radius: 999px;
+    padding: 4px 12px;
+    border: 1px solid var(--amber);
+    background: var(--amber-soft);
+    color: var(--ink);
+  }
+  .chip .n { font-family: var(--mono); font-weight: 600; margin-left: 6px; }
+  .chip[aria-pressed=false] { background: none; border-color: var(--line); color: var(--muted); text-decoration: line-through; }
+  .empty { color: var(--muted); font-size: 0.95rem; margin: 0; }
+  .notes { margin: 12px 0 0; padding: 0; list-style: none; font-size: 0.9rem; }
+  .notes li { padding: 7px 10px; border-radius: 6px; margin-top: 6px; word-break: break-word; }
   .notes li.warn { background: var(--amber-soft); color: var(--amber-text); }
   .notes li.bad { border: 1px solid var(--warn); color: var(--warn); }
-  .notes code { font-family: var(--mono); font-size: 0.85rem; word-break: break-all; }
+  .notes li.info { border: 1px solid var(--line); color: var(--muted); }
   .actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
-  .status { color: var(--muted); font-size: 0.9rem; min-height: 1.5em; }
-  footer { max-width: 1200px; margin: 28px auto 0; color: var(--muted); font-size: 0.85rem; }
+  .status { color: var(--ok); font-size: 0.9rem; min-height: 1.5em; }
+  details { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 16px; }
+  details:first-of-type { margin-top: 12px; }
+  summary { cursor: pointer; font-weight: 600; font-size: 0.98rem; }
+  details > .inner { padding-top: 12px; }
+  .sessions { list-style: none; padding: 0; margin: 10px 0 0; }
+  .sessions li { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 0.92rem; }
+  .sessions li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sessions small { color: var(--muted); }
+  .sub { font-size: 0.95rem; font-weight: 600; margin: 18px 0 6px; }
+  [hidden] { display: none !important; }
+  footer { max-width: 1320px; margin: 28px auto 0; color: var(--muted); font-size: 0.85rem; }
+  footer p { margin: 0 0 4px; max-width: 90ch; }
   @media (prefers-reduced-motion: no-preference) {
-    button { transition: background-color .15s, border-color .15s; }
+    button, .chip { transition: background-color .15s, border-color .15s; }
   }
 </style>
 </head>
 <body>
 <header>
-  <h1>IOC IP formatter for LogScale</h1>
-  <p>Paste defanged IPv4 addresses from an advisory or spreadsheet. They are refanged, validated and turned into a search you can drop into Falcon NG-SIEM. Everything runs in this page; nothing is sent anywhere.</p>
+  <h1>IOC query builder for Falcon NG-SIEM</h1>
+  <p>Paste indicators from an advisory, spreadsheet or report. They are refanged, sorted by type and turned into LogScale searches and lookup files. Everything is processed in this page: nothing you paste is uploaded, and the page blocks all network requests.</p>
 </header>
 
 <main>
-  <section aria-labelledby="in-h">
-    <h2 id="in-h">Indicators</h2>
-    <p class="hint">One per line or mixed into text. Handles <code>[.]</code>, <code>(.)</code>, <code>{.}</code>, <code>[dot]</code>, escaped <code>\.</code> and ports.</p>
-    <textarea id="input" spellcheck="false" aria-label="Defanged IP addresses" placeholder="203[.]0[.]113[.]10&#10;198(.)51(.)100(.)7&#10;TLP:AMBER+STRICT  IP  192[.]0[.]2[.]44"></textarea>
-    <div class="row">
-      <label class="check"><input type="checkbox" id="dedupe" checked> Remove duplicates</label>
-      <label class="check"><input type="checkbox" id="sort"> Sort numerically</label>
-    </div>
-    <div class="actions">
-      <button type="button" id="example">Load example</button>
-      <button type="button" id="clear">Clear</button>
-    </div>
-    <p class="summary" id="summary" aria-live="polite">No addresses yet.</p>
-    <ul class="notes" id="notes"></ul>
-  </section>
+  <div class="col">
+    <section aria-labelledby="in-h">
+      <h2 id="in-h">Indicators</h2>
+      <p class="hint">Paste rows straight from an IOC sheet (a type column like IP, URI, File or SHA256 is used when present) or free text. Defanging such as <code>[.]</code>, <code>(dot)</code>, <code>hxxp</code> and <code>[:]</code> is undone automatically.</p>
+      <textarea id="input" spellcheck="false" aria-label="Indicators" placeholder="TLP:AMBER  IP  203[.]0[.]113[.]10&#10;TLP:AMBER  URI /vpn/scripts/update.deb&#10;hxxps://bad-update[.]example/payload&#10;198.51.100.0/24"></textarea>
+      <div class="actions">
+        <button type="button" id="example">Load example</button>
+        <button type="button" id="clear">Clear</button>
+      </div>
 
-  <section aria-labelledby="out-h">
-    <h2 id="out-h">Search</h2>
-    <div class="tabs" role="tablist" aria-label="Output format">
-      <button type="button" role="tab" aria-selected="true" data-fmt="regex">Raw-text regex</button>
-      <button type="button" role="tab" aria-selected="false" data-fmt="or">OR chain</button>
-      <button type="button" role="tab" aria-selected="false" data-fmt="in">Fielded in()</button>
-      <button type="button" role="tab" aria-selected="false" data-fmt="list">Clean list</button>
-    </div>
-    <p class="hint" id="fmt-hint"></p>
-    <div class="fieldrow" id="fieldrow">
-      <label for="field">Field</label>
-      <input type="text" id="field" value="source.ip" spellcheck="false">
-    </div>
-    <textarea id="output" readonly spellcheck="false" aria-label="Generated search"></textarea>
-    <div class="actions">
-      <button type="button" class="primary" id="copy">Copy search</button>
-      <span class="status" id="status" aria-live="polite"></span>
-    </div>
-  </section>
+      <details open>
+        <summary>Advisory details</summary>
+        <div class="inner grid2">
+          <label for="source">Source</label>
+          <input type="text" id="source" placeholder="Citrix NetScaler, Sept 2026">
+          <label for="tlp">TLP</label>
+          <select id="tlp">
+            <option>TLP:CLEAR</option>
+            <option>TLP:GREEN</option>
+            <option>TLP:AMBER</option>
+            <option selected>TLP:AMBER+STRICT</option>
+            <option>TLP:RED</option>
+          </select>
+        </div>
+        <p class="hint" style="margin-top:8px">TLP is picked up from the pasted text when a marking is found.</p>
+      </details>
+
+      <details>
+        <summary>Options</summary>
+        <div class="inner">
+          <label class="check"><input type="checkbox" id="sort"> Sort indicators within each type</label><br>
+          <label class="check" style="margin-top:8px"><input type="checkbox" id="collapse" checked> Drop paths already covered by a file name IOC (hunt query only)</label>
+        </div>
+      </details>
+
+      <details>
+        <summary>Allowlist</summary>
+        <div class="inner">
+          <p class="hint">Anything here is removed before queries are built. IPs, CIDR ranges, domains (subdomains included), hashes, paths and file names all work. Kept in this page only, unless you save a session.</p>
+          <textarea id="allowlist" spellcheck="false" aria-label="Allowlist" placeholder="Your egress IPs, scanners, CDN ranges&#10;10.0.0.0/8&#10;/libexec/mod_proxy.so"></textarea>
+        </div>
+      </details>
+
+      <details id="sessions-box">
+        <summary>Saved sessions</summary>
+        <div class="inner">
+          <p class="hint">Off by default. When on, sessions are stored in this browser's local storage on this device only, and are never sent anywhere. Turning it off deletes them.</p>
+          <label class="check"><input type="checkbox" id="optin"> Allow saving sessions in this browser</label>
+          <div class="actions">
+            <button type="button" id="save" disabled>Save current session</button>
+            <button type="button" id="wipe" disabled>Delete all</button>
+            <span class="status" id="sess-status" aria-live="polite"></span>
+          </div>
+          <ul class="sessions" id="sessions"></ul>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <div class="col">
+    <section aria-labelledby="det-h">
+      <h2 id="det-h">Detected</h2>
+      <p class="hint">Select a type to leave it out of every output.</p>
+      <div class="chips" id="chips"><p class="empty">Nothing detected yet. Paste indicators or load the example.</p></div>
+      <ul class="notes" id="notes"></ul>
+    </section>
+
+    <section aria-labelledby="out-h">
+      <h2 id="out-h">Output</h2>
+      <div class="tabs" role="tablist" aria-label="Output">
+        <button type="button" role="tab" id="tab-hunt" aria-controls="p-hunt" aria-selected="true">Hunt query</button>
+        <button type="button" role="tab" id="tab-field" aria-controls="p-field" aria-selected="false" tabindex="-1">Fielded query</button>
+        <button type="button" role="tab" id="tab-lookup" aria-controls="p-lookup" aria-selected="false" tabindex="-1">Lookup file</button>
+        <button type="button" role="tab" id="tab-lists" aria-controls="p-lists" aria-selected="false" tabindex="-1">Clean lists</button>
+      </div>
+
+      <div role="tabpanel" id="p-hunt" aria-labelledby="tab-hunt">
+        <p class="hint">Unfielded match against the raw event, across every repo and parser. IPs are digit-bounded so 10.0.0.1 never hits 10.0.0.15, and CIDR ranges are expanded into exact regex. Hashes, paths and file names match case-insensitively.</p>
+        <textarea id="hunt-out" readonly spellcheck="false" aria-label="Hunt query"></textarea>
+        <div class="actions">
+          <button type="button" class="primary" data-copy="hunt-out">Copy query</button>
+          <span class="status" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <div role="tabpanel" id="p-field" aria-labelledby="tab-field" hidden>
+        <p class="hint">Exact field matching inside a <code>case</code> block, which tags each hit with <code>ioc_type</code> and <code>ioc_field</code>. Faster and quieter than the hunt query when you know where each indicator lives. Set the fields under Field mapping.</p>
+        <textarea id="field-out" readonly spellcheck="false" aria-label="Fielded query"></textarea>
+        <div class="actions">
+          <button type="button" class="primary" data-copy="field-out">Copy query</button>
+          <span class="status" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <div role="tabpanel" id="p-lookup" aria-labelledby="tab-lookup" hidden>
+        <p class="hint">Upload the CSV under Next-Gen SIEM, Lookup files, then run the query. Updating the IOC set is a re-upload; saved searches and correlation rules pick it up. <code>match()</code> is exact, so subdomain, path and file-in-path matching stay in the other two queries.</p>
+        <div class="grid2">
+          <label for="lookup-name">File name</label>
+          <input type="text" id="lookup-name" class="mono" spellcheck="false">
+        </div>
+        <p class="sub">CSV</p>
+        <textarea id="csv-out" class="short" readonly spellcheck="false" aria-label="Lookup CSV"></textarea>
+        <div class="actions">
+          <button type="button" class="primary" id="dl-csv">Download CSV</button>
+          <button type="button" id="dl-cidr" hidden>Download CIDR CSV</button>
+          <button type="button" data-copy="csv-out">Copy CSV</button>
+          <span class="status" aria-live="polite"></span>
+        </div>
+        <p class="sub">Query</p>
+        <textarea id="match-out" class="short" readonly spellcheck="false" aria-label="Lookup query"></textarea>
+        <div class="actions">
+          <button type="button" class="primary" data-copy="match-out">Copy query</button>
+          <span class="status" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <div role="tabpanel" id="p-lists" aria-labelledby="tab-lists" hidden>
+        <p class="hint">Refanged and deduplicated, grouped by type.</p>
+        <textarea id="lists-out" readonly spellcheck="false" aria-label="Clean lists"></textarea>
+        <div class="actions">
+          <button type="button" class="primary" data-copy="lists-out">Copy lists</button>
+          <span class="status" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <details>
+        <summary>Shape results</summary>
+        <div class="inner">
+          <p class="hint">Applied to every query in the right order: extra filters first, then the output step.</p>
+          <label for="filters" style="font-size:.95rem">Extra filters, one per line</label>
+          <textarea id="filters" spellcheck="false" placeholder="Vendor.Action != deny&#10;event.action != &quot;flow_terminated&quot;"></textarea>
+          <div class="grid2" style="margin-top:12px">
+            <label for="agg">Output</label>
+            <select id="agg">
+              <option value="none">Raw events</option>
+              <option value="table" selected>Table</option>
+              <option value="group">Group by</option>
+            </select>
+            <label for="table-fields" data-for="table">Table fields</label>
+            <input type="text" id="table-fields" class="mono" data-for="table" value="@timestamp, #repo, #event_simpleName, ComputerName, @rawstring">
+            <label for="group-fields" data-for="group">Group by</label>
+            <input type="text" id="group-fields" class="mono" data-for="group" value="#repo">
+            <label for="collect-fields" data-for="group">Collect</label>
+            <input type="text" id="collect-fields" class="mono" data-for="group" placeholder="Vendor.Action, ComputerName">
+            <label for="tz" data-for="group">Time zone</label>
+            <input type="text" id="tz" class="mono" data-for="group" value="Australia/Hobart">
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Field mapping</summary>
+        <div class="inner">
+          <p class="hint">Used by the fielded and lookup queries. Separate multiple fields with commas; leave a type blank to skip it.</p>
+          <div class="grid2">
+            <label for="preset">Preset</label>
+            <select id="preset">
+              <option value="falcon">Falcon endpoint telemetry</option>
+              <option value="ecs">Normalised (ECS) firewall, proxy, NetScaler</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="grid2" id="fieldmap" style="margin-top:10px"></div>
+        </div>
+      </details>
+    </section>
+  </div>
 </main>
 
-<footer>IPv4 only. Octets above 255 are rejected. Leading zeros are normalised, so 010.1.1.1 becomes 10.1.1.1.</footer>
+<footer>
+  <p>Runs entirely in your browser. The content security policy on this page blocks every outbound connection, so pasted indicators cannot leave the device. Downloads are generated locally.</p>
+  <p>Supports IPv4, CIDR, SHA256, SHA1, MD5, domains, URLs, paths and file names. Octets above 255 and invalid CIDR prefixes are rejected.</p>
+</footer>
 
 <script>
 (() => {
+  'use strict';
   const $ = id => document.getElementById(id);
-  const input = $('input'), output = $('output'), summary = $('summary'), notes = $('notes');
-  const fieldInput = $('field'), fieldRow = $('fieldrow'), fmtHint = $('fmt-hint'), status = $('status');
-  let fmt = 'regex';
 
-  const HINTS = {
-    regex: 'Matches anywhere in @rawstring, bounded by non-digits so 10.0.0.1 will not hit 10.0.0.15.',
-    or: 'Plain quoted OR chain. Substring match, so shorter addresses can hit longer ones.',
-    in: 'Exact match on one field. Fastest option when you know where the IP lives.',
-    list: 'One refanged address per line.'
+  const TYPES = [
+    ['ip', 'IPv4'], ['cidr', 'CIDR'], ['sha256', 'SHA256'], ['sha1', 'SHA1'], ['md5', 'MD5'],
+    ['domain', 'Domain'], ['url', 'URL'], ['path', 'Path'], ['filename', 'File name']
+  ];
+  const LABEL = Object.fromEntries(TYPES);
+  const HASH_TYPES = ['sha256', 'sha1', 'md5'];
+
+  const ALIASES = {
+    'ip': 'x', 'ipv4': 'x', 'ip-dst': 'x', 'ip-src': 'x', 'ip address': 'x', 'ipaddress': 'x', 'ip_address': 'x', 'ipv4-addr': 'x',
+    'cidr': 'x', 'subnet': 'x', 'netblock': 'x', 'ip range': 'x',
+    'sha256': 'x', 'sha-256': 'x', 'sha1': 'x', 'sha-1': 'x', 'md5': 'x', 'hash': 'x', 'file hash': 'x', 'filehash': 'x',
+    'domain': 'x', 'hostname': 'x', 'fqdn': 'x', 'domain name': 'x', 'url': 'x', 'link': 'x',
+    'uri': 'path', 'url path': 'path', 'path': 'path', 'filepath': 'path', 'file path': 'path', 'file_path': 'path', 'directory': 'path',
+    'file': 'filename', 'filename': 'filename', 'file name': 'filename', 'file_name': 'filename'
   };
 
-  function refang(text) {
-    return text
+  const FILE_EXT = 'exe|dll|sys|deb|rpm|so|sh|bash|ps1|psm1|psd1|bat|cmd|vbs|vbe|js|jse|wsf|hta|jar|elf|bin|py|pyc|php|jsp|jspx|asp|aspx|ashx|asmx|war|zip|rar|7z|gz|tgz|tar|xz|msi|msp|lnk|iso|img|vhd|vhdx|dmg|pkg|apk|doc|docm|docx|dotm|xls|xlsm|xlsx|xlsb|ppt|pptm|pptx|pdf|rtf|one|scr|cpl|ocx|dat|tmp|pl|rb|lua|cgi|conf|cfg|ini|log|bak|dylib|plist|job|xml|html|htm|svg|pem|key|crt';
+  const FILE_EXT_SET = new Set(FILE_EXT.split('|'));
+
+  const PRESETS = {
+    falcon: {
+      ip: 'RemoteAddressIP4', cidr: 'RemoteAddressIP4',
+      sha256: 'SHA256HashData', sha1: 'SHA1HashData', md5: 'MD5HashData',
+      domain: 'DomainName', url: '',
+      path: 'ImageFileName, TargetFileName', filename: 'ImageFileName, TargetFileName'
+    },
+    ecs: {
+      ip: 'source.ip, destination.ip', cidr: 'source.ip, destination.ip',
+      sha256: 'file.hash.sha256', sha1: 'file.hash.sha1', md5: 'file.hash.md5',
+      domain: 'url.domain, dns.question.name', url: 'url.original',
+      path: 'url.path, file.path', filename: 'file.name, url.path'
+    }
+  };
+
+  // ---------- helpers ----------
+  const reEsc = s => s.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&');
+  const pathEsc = s => reEsc(s).replace(/\\\\/g, '\\\\{1,2}');
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const q = s => JSON.stringify(s);
+  const fieldRef = f => /^[#@]?[A-Za-z_][\w.]*$/.test(f) ? f : q(f);
+  const splitList = s => s.split(',').map(x => x.trim()).filter(Boolean);
+  const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const ipToInt = ip => ip.split('.').reduce((a, o) => a * 256 + Number(o), 0);
+  const intToIp = n => [24, 16, 8, 0].map(s => Math.floor(n / Math.pow(2, s)) % 256).join('.');
+  const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+  function refang(s) {
+    return s
+      .replace(/\bh(?:xx|XX|\*\*|tt)p(s?)(?=\s*(?:\[\s*)?:)/gi, (m, x) => 'http' + x.toLowerCase())
+      .replace(/\[\s*:\s*\/\s*\/\s*\]/g, '://')
+      .replace(/\[\s*:\s*\]|\(\s*:\s*\)/g, ':')
       .replace(/\\\./g, '.')
-      .replace(/\s*(\[\s*\.\s*\]|\(\s*\.\s*\)|\{\s*\.\s*\}|\[\s*dot\s*\]|\(\s*dot\s*\)|\{\s*dot\s*\})\s*/gi, '.')
-      .replace(/\[\s*:\s*\]/g, ':');
+      .replace(/\s*(?:\[\s*(?:\.|dot)\s*\]|\(\s*(?:\.|dot)\s*\)|\{\s*(?:\.|dot)\s*\})\s*/gi, '.')
+      .replace(/\[\s*@\s*\]|\[\s*at\s*\]/gi, '@');
   }
 
-  const IP_RE = /(?<![\d.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?![\d])(?!\.\d)/g;
-
-  function isSpecial(o) {
-    const [a, b] = o;
+  function isSpecialIp(ip) {
+    const [a, b] = ip.split('.').map(Number);
     return a === 10 || a === 127 || a === 0 || a >= 224 ||
       (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
       (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127);
   }
 
-  function parse(text) {
-    const found = [], rejected = [], special = new Set();
+  function parseCidr(ip, prefix) {
+    const p = Number(prefix);
+    if (p > 32) return null;
+    const n = ipToInt(ip);
+    const size = Math.pow(2, 32 - p);
+    const net = Math.floor(n / size) * size;
+    return { net, prefix: p, value: intToIp(net) + '/' + p, changed: net !== n, original: ip + '/' + p };
+  }
+
+  function cidrRegex(c) {
+    const oct = intToIp(c.net).split('.').map(Number);
+    const full = Math.floor(c.prefix / 8), r = c.prefix % 8;
+    const parts = [];
+    for (let i = 0; i < full; i++) parts.push(String(oct[i]));
+    let i = full;
+    if (i < 4 && r > 0) {
+      const size = 1 << (8 - r), vals = [];
+      for (let v = oct[i]; v < oct[i] + size; v++) vals.push(v);
+      parts.push('(?:' + vals.reverse().join('|') + ')');
+      i++;
+    }
+    for (; i < 4; i++) parts.push('\\d{1,3}');
+    return parts.join('\\.');
+  }
+
+  function cidrContains(outer, ipInt) {
+    const size = Math.pow(2, 32 - outer.prefix);
+    return ipInt >= outer.net && ipInt < outer.net + size;
+  }
+
+  // ---------- extraction ----------
+  const RE = {
+    url: /\b(?:https?|ftp):\/\/[^\s"'<>\]\)}]+/gi,
+    win: /(?:\b[A-Za-z]:|\\\\[\w.$-]+)\\[^\s"'<>|*?]+/g,
+    unix: /(?<![\w.:\/\\-])\/[\w.@+~-]+(?:\/[\w.@+~-]+)+\/?/g,
+    sha256: /(?<![a-f0-9])[a-f0-9]{64}(?![a-f0-9])/gi,
+    sha1: /(?<![a-f0-9])[a-f0-9]{40}(?![a-f0-9])/gi,
+    md5: /(?<![a-f0-9])[a-f0-9]{32}(?![a-f0-9])/gi,
+    cidr: /(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})(?!\d)/g,
+    ip: /(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?!\d)(?!\.\d)/g,
+    file: new RegExp('(?<![\\w.\\/\\\\-])[\\w+~@-]+(?:\\.[\\w+~@-]+)*\\.(?:' + FILE_EXT + ')(?!\\w)(?!\\.\\w)', 'gi'),
+    domain: /(?<![\w.@\/\\-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+([a-z]{2,24})(?![\w-])(?!\.\w)/gi
+  };
+
+  const validIp = ip => ip.split('.').every(o => Number(o) <= 255);
+  const normIp = ip => ip.split('.').map(Number).join('.');
+  const trimTail = s => s.replace(/[-.,;:!?'"]+$/, '');
+
+  function extract(text) {
+    const out = [];
+    let s = text;
+    const take = (re, fn) => {
+      re.lastIndex = 0;
+      s = s.replace(re, (...a) => {
+        const r = fn(...a);
+        if (!r) return a[0];
+        (Array.isArray(r) ? r : [r]).forEach(x => out.push(x));
+        return ' '.repeat(a[0].length);
+      });
+    };
+
+    take(RE.url, m => {
+      const u = m.replace(/[.,;:!?]+$/, '');
+      const items = [];
+      let value = u, host = null;
+      try {
+        const parsed = new URL(u);
+        host = parsed.hostname.toLowerCase();
+        value = parsed.protocol + '//' + parsed.host.toLowerCase() + u.slice(u.indexOf(parsed.host) + parsed.host.length);
+      } catch (e) { /* keep raw */ }
+      items.push({ type: 'url', value });
+      if (host) {
+        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) { if (validIp(host)) items.push({ type: 'ip', value: normIp(host), derived: true }); }
+        else if (host.includes('.')) items.push({ type: 'domain', value: host.replace(/\.$/, ''), derived: true });
+      }
+      return items;
+    });
+    take(RE.win, m => ({ type: 'path', value: trimTail(m) }));
+    take(RE.unix, m => ({ type: 'path', value: trimTail(m) }));
+    take(RE.sha256, m => ({ type: 'sha256', value: m.toLowerCase() }));
+    take(RE.sha1, m => ({ type: 'sha1', value: m.toLowerCase() }));
+    take(RE.md5, m => ({ type: 'md5', value: m.toLowerCase() }));
+    take(RE.cidr, (m, ip, pre) => {
+      if (!validIp(ip)) return { type: 'invalid', value: m };
+      const c = parseCidr(normIp(ip), pre);
+      if (!c) return { type: 'invalid', value: m };
+      return { type: 'cidr', value: c.value, cidr: c };
+    });
+    take(RE.ip, (m, ip) => validIp(ip) ? { type: 'ip', value: normIp(ip) } : { type: 'invalid', value: m });
+    take(RE.file, m => ({ type: 'filename', value: m }));
+    take(RE.domain, (m, tld) => FILE_EXT_SET.has(tld.toLowerCase()) ? null : { type: 'domain', value: m.toLowerCase() });
+    return out;
+  }
+
+  function parseTyped(line) {
+    let cells = line.split('\t');
+    if (cells.length < 2 && line.includes(',')) cells = line.split(',');
+    if (cells.length < 2) return null;
+    for (let i = 0; i < cells.length - 1; i++) {
+      const alias = ALIASES[cells[i].trim().toLowerCase()];
+      if (!alias) continue;
+      const value = refang(cells[i + 1].trim());
+      if (!value || value.toLowerCase() === 'value') return { items: [], comment: '' };
+      const comment = cells.slice(i + 2).map(c => c.trim()).filter(Boolean).join(' ');
+      if (alias === 'path' || alias === 'filename') {
+        const tok = trimTail(value.split(/\s+/)[0]);
+        if (!tok) return { items: [], comment };
+        if (/^(?:https?|ftp):\/\//i.test(tok)) return { items: extract(tok), comment };
+        return { items: [{ type: /[\/\\]/.test(tok) ? 'path' : 'filename', value: tok }], comment };
+      }
+      return { items: extract(value), comment };
+    }
+    return null;
+  }
+
+  function parseAll(text) {
+    const map = new Map(), rejected = [], changedCidrs = [];
+    let dupes = 0;
+    const add = (it, comment) => {
+      if (it.type === 'invalid') { rejected.push(it.value); return; }
+      const key = it.type + '|' + it.value.toLowerCase();
+      if (map.has(key)) {
+        const e = map.get(key);
+        if (!it.derived) { dupes++; if (e.derived) e.derived = false; }
+        if (comment && !e.comment) e.comment = comment;
+        return;
+      }
+      if (it.type === 'cidr' && it.cidr.changed) changedCidrs.push(it.cidr);
+      map.set(key, { type: it.type, value: it.value, comment: comment || '', derived: !!it.derived, cidr: it.cidr });
+    };
     for (const raw of text.split(/\r?\n/)) {
+      if (!raw.trim()) continue;
       const line = refang(raw);
-      if (!line.trim()) continue;
-      let hit = false, m;
-      IP_RE.lastIndex = 0;
-      while ((m = IP_RE.exec(line)) !== null) {
-        const oct = m.slice(1, 5).map(Number);
-        if (oct.some(n => n > 255)) { rejected.push(raw.trim()); hit = true; continue; }
-        const ip = oct.join('.');
-        found.push(ip);
-        if (isSpecial(oct)) special.add(ip);
-        hit = true;
-      }
-      if (!hit && /\d/.test(raw)) rejected.push(raw.trim());
+      const typed = parseTyped(line);
+      const res = typed || { items: extract(line), comment: '' };
+      res.items.forEach(it => add(it, res.comment));
+      if (!res.items.length && !typed && /\d/.test(raw) && !/^\s*(\/\/|#)/.test(raw)) rejected.push(raw.trim());
     }
-    return { found, rejected, special };
+    return { items: [...map.values()], rejected, changedCidrs, dupes };
   }
 
-  const ipNum = ip => ip.split('.').reduce((acc, o) => acc * 256 + Number(o), 0);
-  const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
-  function build(ips) {
-    if (!ips.length) return '';
-    switch (fmt) {
-      case 'regex': return '/(^|[^\\d])(' + ips.map(i => i.replace(/\./g, '\\.')).join('|') + ')([^\\d]|$)/';
-      case 'or': return ips.map(i => '"' + i + '"').join(' or ');
-      case 'in': {
-        const f = fieldInput.value.trim() || 'source.ip';
-        return 'in(field="' + f.replace(/"/g, '\\"') + '", values=[' + ips.map(i => '"' + i + '"').join(', ') + '])';
-      }
-      default: return ips.join('\n');
+  function applyAllowlist(items, allowText) {
+    if (!allowText.trim()) return { kept: items, removed: [] };
+    const allow = parseAll(allowText).items;
+    const exact = new Set(allow.map(a => a.type + '|' + a.value.toLowerCase()));
+    const nets = allow.filter(a => a.type === 'cidr').map(a => a.cidr)
+      .concat(allow.filter(a => a.type === 'ip').map(a => ({ net: ipToInt(a.value), prefix: 32 })));
+    const doms = allow.filter(a => a.type === 'domain').map(a => a.value);
+    const domHit = d => doms.some(x => d === x || d.endsWith('.' + x));
+    const kept = [], removed = [];
+    for (const it of items) {
+      let hit = exact.has(it.type + '|' + it.value.toLowerCase());
+      if (!hit && it.type === 'ip') hit = nets.some(n => cidrContains(n, ipToInt(it.value)));
+      if (!hit && it.type === 'cidr') hit = nets.some(n => n.prefix <= it.cidr.prefix && cidrContains(n, it.cidr.net));
+      if (!hit && it.type === 'domain') hit = domHit(it.value);
+      if (!hit && it.type === 'url') { try { hit = domHit(new URL(it.value).hostname.toLowerCase()); } catch (e) { /* ignore */ } }
+      (hit ? removed : kept).push(it);
     }
+    return { kept, removed };
   }
 
+  // ---------- state ----------
+  const excluded = new Set();
+  let tlpTouched = false;
+  let lastCsv = '', lastCidrCsv = '';
+
+  function grouped(items) {
+    const g = {};
+    TYPES.forEach(([t]) => g[t] = []);
+    items.forEach(it => g[it.type].push(it));
+    if ($('sort').checked) {
+      g.ip.sort((a, b) => ipToInt(a.value) - ipToInt(b.value));
+      g.cidr.sort((a, b) => a.cidr.net - b.cidr.net || a.cidr.prefix - b.cidr.prefix);
+      ['sha256', 'sha1', 'md5', 'domain', 'url', 'path', 'filename'].forEach(t => g[t].sort((a, b) => a.value.toLowerCase().localeCompare(b.value.toLowerCase())));
+    }
+    return g;
+  }
+
+  function countsLine(g) {
+    return TYPES.filter(([t]) => g[t].length).map(([t, l]) => g[t].length + ' ' + l).join(', ');
+  }
+
+  function header(g, kind) {
+    const src = $('source').value.trim() || 'IOC hunt';
+    return [
+      '// ' + src + ', ' + $('tlp').value + (/(AMBER|RED)/.test($('tlp').value) ? ' (restricted sharing)' : ''),
+      '// Generated ' + today() + ': ' + countsLine(g),
+      '// ' + kind
+    ];
+  }
+
+  function tail() {
+    const out = [];
+    $('filters').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+      .forEach(l => out.push(l.startsWith('|') ? l : '| ' + l));
+    const agg = $('agg').value;
+    if (agg === 'table') {
+      const f = splitList($('table-fields').value);
+      if (f.length) out.push('| table([' + f.join(', ') + '], limit=1000, sortby=@timestamp, order=desc)');
+    } else if (agg === 'group') {
+      const f = splitList($('group-fields').value);
+      const c = splitList($('collect-fields').value);
+      const tz = $('tz').value.trim();
+      const tzArg = tz ? ', timezone=' + q(tz) : '';
+      if (f.length) {
+        out.push('| groupBy([' + f.join(', ') + '], function=[count(as=hits), min(@timestamp, as=first_seen), max(@timestamp, as=last_seen)' + (c.length ? ', collect([' + c.join(', ') + '])' : '') + '], limit=max)');
+        out.push('| sort(last_seen, order=desc, limit=20000)');
+        out.push('| formatTime("%Y-%m-%d %H:%M:%S", field=first_seen, as=first_seen' + tzArg + ')');
+        out.push('| formatTime("%Y-%m-%d %H:%M:%S", field=last_seen, as=last_seen' + tzArg + ')');
+      }
+    }
+    return out;
+  }
+
+  // ---------- builders ----------
+  function buildHunt(g) {
+    const blocks = [];
+    const notes = [];
+    if (g.ip.length || g.cidr.length) {
+      const parts = g.ip.map(i => reEsc(i.value)).concat(g.cidr.map(c => cidrRegex(c.cidr)));
+      const label = [g.ip.length ? g.ip.length + ' IPv4' : '', g.cidr.length ? g.cidr.length + ' CIDR (' + g.cidr.map(c => c.value).join(', ') + ')' : ''].filter(Boolean).join(' and ');
+      blocks.push(['// ---- ' + label + ', digit-bounded ----', '/(^|[^\\d])(' + parts.join('|') + ')([^\\d]|$)/']);
+    }
+    const hashes = HASH_TYPES.flatMap(t => g[t]);
+    if (hashes.length) {
+      const label = HASH_TYPES.filter(t => g[t].length).map(t => g[t].length + ' ' + LABEL[t]).join(', ');
+      blocks.push(['// ---- Hashes: ' + label + ' ----', '/(^|[^a-f0-9])(' + hashes.map(h => h.value).join('|') + ')([^a-f0-9]|$)/i']);
+    }
+    if (g.domain.length) {
+      blocks.push(['// ---- ' + g.domain.length + ' domain' + (g.domain.length === 1 ? '' : 's') + ', subdomains included ----', '/(^|[^a-z0-9-])(' + g.domain.map(d => reEsc(d.value)).join('|') + ')([^a-z0-9.-]|\\.([^a-z0-9-]|$)|$)/i']);
+    }
+    if (g.url.length) {
+      blocks.push(['// ---- ' + g.url.length + ' URL' + (g.url.length === 1 ? '' : 's') + ' ----', '/(' + g.url.map(u => reEsc(u.value)).join('|') + ')/i']);
+    }
+    let paths = g.path;
+    if ($('collapse').checked && g.filename.length && paths.length) {
+      const names = new Set(g.filename.map(f => f.value.toLowerCase()));
+      const covered = paths.filter(p => names.has(p.value.split(/[\/\\]/).pop().toLowerCase()));
+      if (covered.length) notes.push(covered.length + ' path' + (covered.length === 1 ? ' is' : 's are') + ' left out of the hunt query because a file name IOC already matches ' + (covered.length === 1 ? 'it' : 'them') + '.');
+      paths = paths.filter(p => !covered.includes(p));
+    }
+    if (paths.length) {
+      blocks.push(['// ---- ' + paths.length + ' path' + (paths.length === 1 ? '' : 's') + ' or URI' + (paths.length === 1 ? '' : 's') + ' ----', '/(' + paths.map(p => pathEsc(p.value)).join('|') + ')/i']);
+    }
+    if (g.filename.length) {
+      blocks.push(['// ---- ' + g.filename.length + ' file name' + (g.filename.length === 1 ? '' : 's') + ' (also match inside URIs and paths) ----', '/(^|[^\\w.-])(' + g.filename.map(f => pathEsc(f.value)).join('|') + ')([^\\w.-]|$)/i']);
+    }
+    if (!blocks.length) return { text: '', notes };
+    const lines = header(g, 'Raw-text match across @rawstring. Run across all repos, 30 days or more.');
+    blocks.forEach(([c, e], i) => { lines.push('', c, (i ? 'or ' : '') + e); });
+    const t = tail();
+    if (t.length) lines.push('', ...t);
+    return { text: lines.join('\n'), notes };
+  }
+
+  function fieldsFor(t) {
+    const el = document.querySelector('#fieldmap input[data-type="' + t + '"]');
+    return el ? splitList(el.value) : [];
+  }
+
+  function fieldExpr(t, f, items) {
+    const vals = items.map(i => i.value);
+    switch (t) {
+      case 'ip': return 'in(field=' + q(f) + ', values=[' + vals.map(q).join(', ') + '])';
+      case 'cidr': return 'cidr(field=' + q(f) + ', subnet=[' + vals.map(q).join(', ') + '])';
+      case 'sha256': case 'sha1': case 'md5':
+        return 'in(field=' + q(f) + ', values=[' + vals.map(q).join(', ') + '], ignoreCase=true)';
+      case 'domain': return fieldRef(f) + '=/(^|\\.)(' + vals.map(reEsc).join('|') + ')\\.?$/i';
+      case 'url': return fieldRef(f) + '=/(' + vals.map(reEsc).join('|') + ')/i';
+      case 'path': return fieldRef(f) + '=/(' + vals.map(pathEsc).join('|') + ')/i';
+      case 'filename': return fieldRef(f) + '=/(^|[\\\\\\/])(' + vals.map(pathEsc).join('|') + ')$/i';
+    }
+    return '';
+  }
+
+  function buildFielded(g) {
+    const branches = [], skipped = [];
+    TYPES.forEach(([t, l]) => {
+      if (!g[t].length) return;
+      const fs = fieldsFor(t);
+      if (!fs.length) { skipped.push(g[t].length + ' ' + l); return; }
+      fs.forEach(f => branches.push('  ' + fieldExpr(t, f, g[t]) + ' | ioc_type := ' + q(t) + ' | ioc_field := ' + q(f) + ';'));
+    });
+    if (!branches.length) return { text: '', skipped };
+    const lines = header(g, 'Fielded match. Each hit is tagged with ioc_type and ioc_field.');
+    if (skipped.length) lines.push('// Not included, no field set: ' + skipped.join(', '));
+    lines.push('', 'case {', ...branches, '}');
+    const t = tail();
+    if (t.length) lines.push('', ...t);
+    return { text: lines.join('\n'), skipped };
+  }
+
+  function csvCell(v) {
+    const s = String(v ?? '');
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function lookupNames() {
+    let name = $('lookup-name').value.trim() || $('lookup-name').placeholder;
+    if (!/\.csv$/i.test(name)) name += '.csv';
+    return { main: name, cidr: name.replace(/\.csv$/i, '_cidr.csv') };
+  }
+
+  function buildLookup(g, all) {
+    const tlp = $('tlp').value, src = $('source').value.trim();
+    const head = 'indicator,ioc_type,ioc_tlp,ioc_source,ioc_comment';
+    const row = it => [it.value, it.type, tlp, src, it.comment].map(csvCell).join(',');
+    const ordered = TYPES.flatMap(([t]) => g[t]);
+    const csv = ordered.length ? [head, ...ordered.map(row)].join('\n') : '';
+    const cidrCsv = g.cidr.length ? [head, ...g.cidr.map(row)].join('\n') : '';
+    const names = lookupNames();
+    const inc = 'include=[ioc_type, ioc_tlp, ioc_comment]';
+    const branches = [], left = [];
+    TYPES.forEach(([t, l]) => {
+      if (!g[t].length) return;
+      if (t === 'path' || t === 'filename') { left.push(g[t].length + ' ' + l + ' (exact match unsuitable)'); return; }
+      const fs = fieldsFor(t);
+      if (!fs.length) { left.push(g[t].length + ' ' + l + ' (no field set)'); return; }
+      fs.forEach(f => {
+        let e;
+        if (t === 'cidr') e = 'match(file=' + q(names.cidr) + ', field=' + fieldRef(f) + ', column=indicator, mode=cidr, ' + inc + ')';
+        else if (HASH_TYPES.includes(t) || t === 'domain' || t === 'url') e = 'match(file=' + q(names.main) + ', field=' + fieldRef(f) + ', column=indicator, ignoreCase=true, ' + inc + ')';
+        else e = 'match(file=' + q(names.main) + ', field=' + fieldRef(f) + ', column=indicator, ' + inc + ')';
+        branches.push('  ' + e + ' | ioc_field := ' + q(f) + ';');
+      });
+    });
+    let text = '';
+    if (branches.length) {
+      const lines = header(g, 'Lookup match. Upload ' + names.main + (cidrCsv ? ' and ' + names.cidr : '') + ' first.');
+      if (left.length) lines.push('// Not included: ' + left.join(', '));
+      lines.push('', 'case {', ...branches, '}');
+      const t = tail();
+      if (t.length) lines.push('', ...t);
+      text = lines.join('\n');
+    }
+    return { csv, cidrCsv, text };
+  }
+
+  function buildLists(g) {
+    const blocks = [];
+    TYPES.forEach(([t, l]) => {
+      if (g[t].length) blocks.push('# ' + l + ' (' + g[t].length + ')\n' + g[t].map(i => i.value).join('\n'));
+    });
+    return blocks.join('\n\n');
+  }
+
+  // ---------- render ----------
   function render() {
-    const { found, rejected, special } = parse(input.value);
-    let ips = $('dedupe').checked ? [...new Set(found)] : found.slice();
-    if ($('sort').checked) ips.sort((a, b) => ipNum(a) - ipNum(b));
-    const dupes = found.length - new Set(found).size;
+    const text = $('input').value;
+    if (!tlpTouched) {
+      const m = text.match(/TLP\s*:\s*(CLEAR|WHITE|GREEN|AMBER\s*\+\s*STRICT|AMBER|RED)/i);
+      if (m) {
+        let v = m[1].toUpperCase().replace(/\s+/g, '');
+        if (v === 'WHITE') v = 'CLEAR';
+        $('tlp').value = 'TLP:' + v;
+      }
+    }
+    const parsed = parseAll(text);
+    const allow = applyAllowlist(parsed.items, $('allowlist').value);
+    const present = grouped(allow.kept);
+    const active = allow.kept.filter(i => !excluded.has(i.type));
+    const g = grouped(active);
 
-    output.value = build(ips);
-    status.textContent = '';
-
-    if (!found.length && !rejected.length) {
-      summary.textContent = 'No addresses yet.';
+    const chips = $('chips');
+    const detected = TYPES.filter(([t]) => present[t].length);
+    if (!detected.length) {
+      chips.innerHTML = '<p class="empty">Nothing detected yet. Paste indicators or load the example.</p>';
     } else {
-      const parts = [`<strong>${ips.length}</strong> address${ips.length === 1 ? '' : 'es'} in the search`];
-      if (dupes) parts.push(`${dupes} duplicate${dupes === 1 ? '' : 's'} ${$('dedupe').checked ? 'removed' : 'kept'}`);
-      summary.innerHTML = parts.join(', ') + '.';
+      chips.innerHTML = detected.map(([t, l]) =>
+        '<button type="button" class="chip" data-type="' + t + '" aria-pressed="' + !excluded.has(t) + '">' + esc(l) + '<span class="n">' + present[t].length + '</span></button>').join('');
     }
 
-    const items = [];
-    if (special.size) {
-      items.push(`<li class="warn">${special.size} private, loopback or reserved address${special.size === 1 ? ' is' : 'es are'} included. Check they belong in an IOC list: <code>${esc([...special].join(', '))}</code></li>`);
+    $('lookup-name').placeholder = (slug($('source').value) || 'ioc_lookup') + '.csv';
+    const hunt = buildHunt(g);
+    const fielded = buildFielded(g);
+    const lookup = buildLookup(g);
+    $('hunt-out').value = hunt.text;
+    $('field-out').value = fielded.text;
+    $('csv-out').value = lookup.csv;
+    $('match-out').value = lookup.text;
+    $('lists-out').value = buildLists(g);
+    lastCsv = lookup.csv; lastCidrCsv = lookup.cidrCsv;
+    $('dl-cidr').hidden = !lookup.cidrCsv;
+    $('dl-csv').disabled = !lookup.csv;
+    document.querySelectorAll('.status').forEach(s => { if (s.id !== 'sess-status') s.textContent = ''; });
+
+    const notes = [];
+    const special = g.ip.filter(i => isSpecialIp(i.value)).map(i => i.value);
+    if (special.length) notes.push(['warn', special.length + ' private, loopback or reserved address' + (special.length === 1 ? ' is' : 'es are') + ' included. Check they belong in an IOC list: <code>' + esc(special.join(', ')) + '</code>']);
+    const broad = g.cidr.filter(c => c.cidr.prefix < 16).map(c => c.value);
+    if (broad.length) notes.push(['warn', 'Very broad range' + (broad.length === 1 ? '' : 's') + ' will be noisy: <code>' + esc(broad.join(', ')) + '</code>']);
+    if (parsed.changedCidrs.length) notes.push(['info', 'CIDR normalised to the network address: ' + parsed.changedCidrs.map(c => '<code>' + esc(c.original) + '</code> to <code>' + esc(c.value) + '</code>').join(', ')]);
+    const derived = active.filter(i => i.derived);
+    if (derived.length) notes.push(['info', derived.length + ' domain or IP' + (derived.length === 1 ? ' was' : 's were') + ' taken from URL hosts: <code>' + esc(derived.map(d => d.value).join(', ')) + '</code>']);
+    if (parsed.dupes) notes.push(['info', parsed.dupes + ' duplicate' + (parsed.dupes === 1 ? '' : 's') + ' removed.']);
+    if (allow.removed.length) notes.push(['info', allow.removed.length + ' indicator' + (allow.removed.length === 1 ? '' : 's') + ' removed by the allowlist: <code>' + esc(allow.removed.map(r => r.value).join(', ')) + '</code>']);
+    hunt.notes.forEach(n => notes.push(['info', esc(n)]));
+    if (fielded.skipped.length) notes.push(['info', 'Left out of the fielded query because no field is mapped: ' + esc(fielded.skipped.join(', ')) + '. Set one under Field mapping.']);
+    if (parsed.rejected.length) {
+      const shown = parsed.rejected.slice(0, 8).map(r => esc(r.length > 80 ? r.slice(0, 80) + '...' : r)).join('<br>');
+      notes.push(['bad', parsed.rejected.length + ' item' + (parsed.rejected.length === 1 ? '' : 's') + ' could not be read as an indicator:<br><code>' + shown + '</code>' + (parsed.rejected.length > 8 ? '<br>and ' + (parsed.rejected.length - 8) + ' more' : '')]);
     }
-    if (rejected.length) {
-      const shown = rejected.slice(0, 8).map(r => esc(r.length > 70 ? r.slice(0, 70) + '...' : r)).join('<br>');
-      items.push(`<li class="bad">${rejected.length} line${rejected.length === 1 ? '' : 's'} with numbers could not be read as an IPv4 address:<br><code>${shown}</code>${rejected.length > 8 ? '<br>and ' + (rejected.length - 8) + ' more' : ''}</li>`);
-    }
-    notes.innerHTML = items.join('');
+    $('notes').innerHTML = notes.map(([c, h]) => '<li class="' + c + '">' + h + '</li>').join('');
   }
 
-  document.querySelectorAll('[role=tab]').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('[role=tab]').forEach(t => t.setAttribute('aria-selected', String(t === tab)));
-      fmt = tab.dataset.fmt;
-      fieldRow.classList.toggle('show', fmt === 'in');
-      fmtHint.textContent = HINTS[fmt];
-      render();
+  // ---------- field map UI ----------
+  function buildFieldMap() {
+    $('fieldmap').innerHTML = TYPES.map(([t, l]) =>
+      '<label for="fm-' + t + '">' + esc(l) + '</label><input type="text" class="mono" id="fm-' + t + '" data-type="' + t + '" spellcheck="false">').join('');
+    applyPreset('falcon');
+    $('fieldmap').addEventListener('input', () => { $('preset').value = 'custom'; render(); });
+  }
+  function applyPreset(name) {
+    const p = PRESETS[name];
+    if (!p) return;
+    TYPES.forEach(([t]) => { $('fm-' + t).value = p[t] || ''; });
+  }
+
+  function syncAgg() {
+    const v = $('agg').value;
+    document.querySelectorAll('[data-for]').forEach(el => { el.hidden = el.dataset.for !== v; });
+  }
+
+  // ---------- tabs ----------
+  const tabs = [...document.querySelectorAll('[role=tab]')];
+  function selectTab(tab) {
+    tabs.forEach(t => {
+      const on = t === tab;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      $(t.getAttribute('aria-controls')).hidden = !on;
+    });
+  }
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => selectTab(tab));
+    tab.addEventListener('keydown', e => {
+      const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!d) return;
+      const next = tabs[(i + d + tabs.length) % tabs.length];
+      selectTab(next); next.focus(); e.preventDefault();
     });
   });
 
-  $('copy').addEventListener('click', async () => {
-    if (!output.value) { status.textContent = 'Nothing to copy. Paste some addresses first.'; return; }
-    try {
-      await navigator.clipboard.writeText(output.value);
-    } catch {
-      output.select();
-      document.execCommand('copy');
+  // ---------- copy / download ----------
+  document.addEventListener('click', async e => {
+    const btn = e.target.closest('[data-copy]');
+    if (btn) {
+      const ta = $(btn.dataset.copy);
+      const status = btn.parentElement.querySelector('.status');
+      if (!ta.value) { status.textContent = 'Nothing to copy yet.'; return; }
+      try { await navigator.clipboard.writeText(ta.value); }
+      catch (err) { ta.select(); document.execCommand('copy'); }
+      status.textContent = 'Copied.';
+      return;
     }
-    status.textContent = 'Copied to clipboard.';
+    const chip = e.target.closest('.chip');
+    if (chip) {
+      const t = chip.dataset.type;
+      excluded.has(t) ? excluded.delete(t) : excluded.add(t);
+      render();
+      const again = document.querySelector('.chip[data-type="' + t + '"]');
+      if (again) again.focus();
+    }
   });
 
+  function download(name, text) {
+    const blob = new Blob([text + '\n'], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  $('dl-csv').addEventListener('click', () => {
+    if (!lastCsv) return;
+    download(lookupNames().main, lastCsv);
+    $('dl-csv').parentElement.querySelector('.status').textContent = 'Downloaded ' + lookupNames().main + '.';
+  });
+  $('dl-cidr').addEventListener('click', () => {
+    if (!lastCidrCsv) return;
+    download(lookupNames().cidr, lastCidrCsv);
+    $('dl-csv').parentElement.querySelector('.status').textContent = 'Downloaded ' + lookupNames().cidr + '.';
+  });
+
+  // ---------- sessions (opt-in, this browser only) ----------
+  const SKEY = 'iocbuilder.sessions', OKEY = 'iocbuilder.optin';
+  const ls = (() => { try { const s = window.localStorage; s.getItem(OKEY); return s; } catch (e) { return null; } })();
+  const getSessions = () => { try { return JSON.parse(ls.getItem(SKEY) || '[]'); } catch (e) { return []; } };
+  const setSessions = v => { try { ls.setItem(SKEY, JSON.stringify(v)); return true; } catch (e) { return false; } };
+
+  function renderSessions() {
+    const on = $('optin').checked;
+    $('save').disabled = !on; $('wipe').disabled = !on;
+    const list = on ? getSessions() : [];
+    $('sessions').innerHTML = list.map(s =>
+      '<li><span>' + esc(s.name) + ' <small>' + esc(s.tlp) + ', ' + esc(s.when) + '</small></span>' +
+      '<span><button type="button" data-load="' + s.id + '">Load</button> <button type="button" data-del="' + s.id + '">Delete</button></span></li>').join('');
+  }
+  if (!ls) {
+    $('optin').disabled = true;
+    $('sess-status').textContent = 'Local storage is unavailable in this browser.';
+  } else {
+    $('optin').checked = ls.getItem(OKEY) === '1';
+  }
+  $('optin').addEventListener('change', () => {
+    if ($('optin').checked) {
+      try { ls.setItem(OKEY, '1'); } catch (e) { /* ignore */ }
+    } else {
+      const n = getSessions().length;
+      if (n && !confirm('Turning this off deletes ' + n + ' saved session' + (n === 1 ? '' : 's') + ' from this browser.')) { $('optin').checked = true; return; }
+      try { ls.removeItem(SKEY); ls.removeItem(OKEY); } catch (e) { /* ignore */ }
+      $('sess-status').textContent = 'Saved sessions deleted.';
+    }
+    renderSessions();
+  });
+  $('save').addEventListener('click', () => {
+    if (!$('input').value.trim()) { $('sess-status').textContent = 'Nothing to save yet.'; return; }
+    const list = getSessions();
+    const d = new Date();
+    list.unshift({
+      id: String(Date.now()),
+      name: $('source').value.trim() || 'Untitled session',
+      when: today() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'),
+      tlp: $('tlp').value, source: $('source').value, input: $('input').value, allow: $('allowlist').value
+    });
+    $('sess-status').textContent = setSessions(list.slice(0, 20)) ? 'Session saved.' : 'Could not save. Storage may be full.';
+    renderSessions();
+  });
+  $('wipe').addEventListener('click', () => {
+    if (!confirm('Delete all saved sessions from this browser?')) return;
+    setSessions([]);
+    $('sess-status').textContent = 'All sessions deleted.';
+    renderSessions();
+  });
+  $('sessions').addEventListener('click', e => {
+    const load = e.target.closest('[data-load]'), del = e.target.closest('[data-del]');
+    if (load) {
+      const s = getSessions().find(x => x.id === load.dataset.load);
+      if (!s) return;
+      $('input').value = s.input; $('source').value = s.source; $('allowlist').value = s.allow || '';
+      $('tlp').value = s.tlp; tlpTouched = true;
+      excluded.clear();
+      $('sess-status').textContent = 'Loaded "' + s.name + '".';
+      render();
+    } else if (del) {
+      setSessions(getSessions().filter(x => x.id !== del.dataset.del));
+      $('sess-status').textContent = 'Session deleted.';
+      renderSessions();
+    }
+  });
+
+  // ---------- wiring ----------
   $('example').addEventListener('click', () => {
-    input.value = [
-      'TLP:AMBER+STRICT\tIP\t203[.]0[.]113[.]10',
-      'TLP:AMBER+STRICT\tIP\t203[.]0[.]113[.]105',
-      '198(.)51(.)100(.)7:443',
-      'callback to 192[dot]0[dot]2[dot]44 observed',
+    $('source').value = 'Example advisory';
+    $('input').value = [
+      'tlp\ttype\tvalue\tcomment',
+      'TLP:AMBER\tIP\t203[.]0[.]113[.]10\tscanning source',
+      'TLP:AMBER\tIP\t203[.]0[.]113[.]105',
+      'TLP:AMBER\tCIDR\t198[.]51[.]100[.]0/24\tactor hosting range',
+      'TLP:AMBER\tURI\t/vpn/scripts/linux/update-helper.deb\twebshell request',
+      'TLP:AMBER\tFile\tupdate-helper.deb\twebshell file name',
+      'TLP:AMBER\tfilepath\t/var/app/gui/vpn/scripts/linux/update-helper.deb',
+      'TLP:AMBER\tSHA256\tE3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855\twebshell hash',
+      'TLP:AMBER\tMD5\td41d8cd98f00b204e9800998ecf8427e',
+      'Beacons to hxxps://cdn-sync[.]example/api/v2/check and 192[.]0[.]2[.]44:8443',
+      'Dropper staged at C:\\ProgramData\\Sync\\svc-update.exe',
       '203[.]0[.]113[.]10',
-      '10[.]20[.]30[.]40',
       '300[.]1[.]1[.]1'
     ].join('\n');
     render();
   });
-  $('clear').addEventListener('click', () => { input.value = ''; render(); input.focus(); });
+  $('clear').addEventListener('click', () => { $('input').value = ''; excluded.clear(); tlpTouched = false; render(); $('input').focus(); });
+  $('tlp').addEventListener('change', () => { tlpTouched = true; render(); });
+  $('preset').addEventListener('change', () => { applyPreset($('preset').value); render(); });
+  $('agg').addEventListener('change', () => { syncAgg(); render(); });
+  ['input', 'source', 'allowlist', 'filters', 'table-fields', 'group-fields', 'collect-fields', 'tz', 'lookup-name']
+    .forEach(id => $(id).addEventListener('input', render));
+  ['sort', 'collapse'].forEach(id => $(id).addEventListener('change', render));
 
-  ['input', 'change'].forEach(ev => {
-    input.addEventListener(ev, render);
-    $('dedupe').addEventListener(ev, render);
-    $('sort').addEventListener(ev, render);
-    fieldInput.addEventListener(ev, render);
-  });
-
-  fmtHint.textContent = HINTS[fmt];
+  buildFieldMap();
+  syncAgg();
+  renderSessions();
   render();
 })();
 </script>
