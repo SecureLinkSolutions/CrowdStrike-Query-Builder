@@ -89,7 +89,7 @@
     border-radius: 6px;
     padding: 12px;
   }
-  #input { min-height: 320px; }
+  #input { min-height: 260px; }
   #allowlist { min-height: 110px; }
   #filters { min-height: 70px; }
   textarea[readonly] { background: var(--amber-soft); border-color: var(--amber); min-height: 340px; white-space: pre; overflow-x: auto; }
@@ -171,6 +171,34 @@
   .layer-meta code { font-family: var(--mono); font-size: 0.85rem; color: var(--ink); }
   pre.hex { font: 12px/1.5 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-x: auto; margin: 0; }
   textarea.layer-text[readonly] { min-height: 140px; }
+
+  /* ---- layout polish ---- */
+  main { row-gap: 24px; }
+  section.wide { grid-column: 1 / -1; }
+  section { padding: 24px; }
+  section > h2, .section-head h2 { font-size: 1.15rem; }
+  .section-head { margin-bottom: 16px; }
+  .section-head .hint { margin: 4px 0 0; max-width: 80ch; }
+  .field-label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--muted); margin: 0 0 6px; letter-spacing: 0.02em; }
+  .decode-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+  @media (min-width: 1000px) { .decode-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); } }
+  #b64-in { min-height: 340px; }
+  #b64-out .layer:first-child { margin-top: 0; }
+  .empty-state { margin: 0; min-height: 340px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted); font-size: 0.95rem; }
+  button { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; }
+  button:not(.primary):not([role=tab]):not(.chip):hover { border-color: var(--muted); }
+  button.primary:hover { filter: brightness(1.06); }
+  textarea[readonly] { background: var(--bg); border-color: var(--line); border-left: 3px solid var(--amber); }
+  details { border-top: 1px solid var(--line); padding: 14px 0 0; margin-top: 14px; }
+  summary { list-style: none; display: flex; align-items: center; gap: 10px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); flex: none; margin-left: 2px; }
+  details[open] > summary::before { transform: rotate(45deg); margin-top: -4px; }
+  summary:hover { color: var(--amber-text); }
+  .grid2 input[type=text], .grid2 select { width: 100%; }
+  .layer { background: var(--bg); }
+  .layer-h { font-size: 0.98rem; }
+  @media (prefers-reduced-motion: no-preference) { summary::before { transition: transform .15s; } }
   [hidden] { display: none !important; }
   footer { max-width: 1320px; margin: 28px auto 0; color: var(--muted); font-size: 0.85rem; }
   footer p { margin: 0 0 4px; max-width: 90ch; }
@@ -190,7 +218,7 @@
     <section aria-labelledby="in-h">
       <h2 id="in-h">Indicators</h2>
       <p class="hint">Paste indicators in any format: one per line, spreadsheet rows or free text. If rows include a type column, it is used. Common defanging is undone automatically.</p>
-      <textarea id="input" spellcheck="false" aria-label="Indicators" placeholder="One indicator per line, or paste rows and free text&#10;203[.]0[.]113[.]10&#10;hxxps://example[.]com/path&#10;198.51.100.0/24"></textarea>
+      <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="input" spellcheck="false" aria-label="Indicators" placeholder="One indicator per line, or paste rows and free text&#10;203[.]0[.]113[.]10&#10;hxxps://example[.]com/path&#10;198.51.100.0/24"></textarea>
       <div class="actions">
         <button type="button" id="example">Load example</button>
         <button type="button" id="clear">Clear</button>
@@ -200,7 +228,7 @@
         <summary>Advisory details</summary>
         <div class="inner grid2">
           <label for="source">Source</label>
-          <input type="text" id="source" placeholder="Advisory or report name">
+          <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="source" placeholder="Advisory or report name">
           <label for="tlp">TLP</label>
           <select id="tlp">
             <option>TLP:CLEAR</option>
@@ -227,7 +255,7 @@
         <summary>Allowlist</summary>
         <div class="inner">
           <p class="hint">Indicators listed here are removed before queries are built. Domains also cover their subdomains, and ranges cover every address inside them.</p>
-          <textarea id="allowlist" spellcheck="false" aria-label="Allowlist" placeholder="One per line: IPs, ranges, domains, hashes, paths or file names"></textarea>
+          <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="allowlist" spellcheck="false" aria-label="Allowlist" placeholder="One per line: IPs, ranges, domains, hashes, paths or file names"></textarea>
         </div>
       </details>
 
@@ -246,16 +274,6 @@
       </details>
     </section>
 
-    <section aria-labelledby="b64-h">
-      <h2 id="b64-h">Decode</h2>
-      <p class="hint">Paste base64, URL-encoded text or a whole command line. PowerShell text and gzip or deflate compression are handled, and nested layers are decoded in turn.</p>
-      <textarea id="b64-in" spellcheck="false" aria-label="Text to decode" placeholder="Encoded string, URL or command line"></textarea>
-      <div class="actions">
-        <button type="button" id="b64-clear">Clear</button>
-        <span class="status" id="b64-status" aria-live="polite"></span>
-      </div>
-      <div id="b64-out"></div>
-    </section>
   </div>
 
   <div class="col">
@@ -277,7 +295,7 @@
 
       <div role="tabpanel" id="p-hunt" aria-labelledby="tab-hunt">
         <p class="hint">Matches the raw event text in any repo or data source. IP matches are exact, and ranges, hashes, paths and file names are handled automatically.</p>
-        <textarea id="hunt-out" readonly spellcheck="false" aria-label="Hunt query"></textarea>
+        <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="hunt-out" readonly spellcheck="false" aria-label="Hunt query"></textarea>
         <div class="actions">
           <button type="button" class="primary" data-copy="hunt-out">Copy query</button>
           <span class="status" aria-live="polite"></span>
@@ -286,7 +304,7 @@
 
       <div role="tabpanel" id="p-field" aria-labelledby="tab-field" hidden>
         <p class="hint">Matches specific fields and tags each hit with the indicator type and field. Choose the fields under Field mapping.</p>
-        <textarea id="field-out" readonly spellcheck="false" aria-label="Fielded query"></textarea>
+        <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="field-out" readonly spellcheck="false" aria-label="Fielded query"></textarea>
         <div class="actions">
           <button type="button" class="primary" data-copy="field-out">Copy query</button>
           <span class="status" aria-live="polite"></span>
@@ -297,10 +315,10 @@
         <p class="hint">Upload the CSV as a lookup file, then run the query. Lookups use exact matching, so paths and file names are covered by the other queries.</p>
         <div class="grid2">
           <label for="lookup-name">File name</label>
-          <input type="text" id="lookup-name" class="mono" spellcheck="false">
+          <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="lookup-name" class="mono" spellcheck="false">
         </div>
         <p class="sub">CSV</p>
-        <textarea id="csv-out" class="short" readonly spellcheck="false" aria-label="Lookup CSV"></textarea>
+        <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="csv-out" class="short" readonly spellcheck="false" aria-label="Lookup CSV"></textarea>
         <div class="actions">
           <button type="button" class="primary" id="dl-csv">Download CSV</button>
           <button type="button" id="dl-cidr" hidden>Download CIDR CSV</button>
@@ -308,7 +326,7 @@
           <span class="status" aria-live="polite"></span>
         </div>
         <p class="sub">Query</p>
-        <textarea id="match-out" class="short" readonly spellcheck="false" aria-label="Lookup query"></textarea>
+        <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="match-out" class="short" readonly spellcheck="false" aria-label="Lookup query"></textarea>
         <div class="actions">
           <button type="button" class="primary" data-copy="match-out">Copy query</button>
           <span class="status" aria-live="polite"></span>
@@ -317,7 +335,7 @@
 
       <div role="tabpanel" id="p-lists" aria-labelledby="tab-lists" hidden>
         <p class="hint">Refanged and deduplicated, grouped by type.</p>
-        <textarea id="lists-out" readonly spellcheck="false" aria-label="Clean lists"></textarea>
+        <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="lists-out" readonly spellcheck="false" aria-label="Clean lists"></textarea>
         <div class="actions">
           <button type="button" class="primary" data-copy="lists-out">Copy lists</button>
           <span class="status" aria-live="polite"></span>
@@ -329,7 +347,7 @@
         <div class="inner">
           <p class="hint">Applied to every query: filters first, then the output format.</p>
           <label for="filters" style="font-size:.95rem">Extra filters, one per line</label>
-          <textarea id="filters" spellcheck="false" placeholder="field != value"></textarea>
+          <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="filters" spellcheck="false" placeholder="field != value"></textarea>
           <div class="grid2" style="margin-top:12px">
             <label for="agg">Output</label>
             <select id="agg">
@@ -338,13 +356,13 @@
               <option value="group">Group by</option>
             </select>
             <label for="table-fields" data-for="table">Table fields</label>
-            <input type="text" id="table-fields" class="mono" data-for="table" value="@timestamp, #repo, #event_simpleName, ComputerName, @rawstring">
+            <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="table-fields" class="mono" data-for="table" value="@timestamp, #repo, #event_simpleName, ComputerName, @rawstring">
             <label for="group-fields" data-for="group">Group by</label>
-            <input type="text" id="group-fields" class="mono" data-for="group" value="#repo">
+            <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="group-fields" class="mono" data-for="group" value="#repo">
             <label for="collect-fields" data-for="group">Collect</label>
-            <input type="text" id="collect-fields" class="mono" data-for="group" placeholder="field1, field2">
+            <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="collect-fields" class="mono" data-for="group" placeholder="field1, field2">
             <label for="tz" data-for="group">Time zone</label>
-            <input type="text" id="tz" class="mono" data-for="group" value="">
+            <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="tz" class="mono" data-for="group" value="">
           </div>
         </div>
       </details>
@@ -366,10 +384,30 @@
       </details>
     </section>
   </div>
+  <section class="wide" aria-labelledby="b64-h">
+    <div class="section-head">
+      <h2 id="b64-h">Decode</h2>
+      <p class="hint">Paste base64, URL-encoded text or a whole command line. PowerShell text and gzip or deflate compression are handled, and nested layers are decoded in turn.</p>
+    </div>
+    <div class="decode-grid">
+      <div>
+        <label class="field-label" for="b64-in">Encoded input</label>
+        <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="b64-in" spellcheck="false" placeholder="Encoded string, URL or command line"></textarea>
+        <div class="actions">
+          <button type="button" id="b64-clear">Clear</button>
+          <span class="status" id="b64-status" aria-live="polite"></span>
+        </div>
+      </div>
+      <div>
+        <span class="field-label">Decoded layers</span>
+        <div id="b64-out"><p class="empty-state">Decoded layers appear here, one per step.</p></div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <footer>
-  <p>Runs entirely in your browser. The content security policy on this page blocks every outbound connection, so pasted indicators cannot leave the device. Downloads are generated locally.</p>
+  <p>Runs entirely in your browser. The page's content security policy blocks every outbound connection, and downloads are generated locally. Browser extensions are not bound by that policy and can read what you paste, so use a browser profile with no extensions for restricted material. Grammarly is told to ignore every field.</p>
   <p>Supports IPv4, CIDR, SHA256, SHA1, MD5, domains, URLs, paths and file names. Octets above 255 and invalid CIDR prefixes are rejected.</p>
 </footer>
 
@@ -413,6 +451,11 @@
   };
 
   // ---------- helpers ----------
+  const noExt = el => {
+    [['data-gramm', 'false'], ['data-gramm_editor', 'false'], ['data-enable-grammarly', 'false'], ['autocomplete', 'off'], ['autocorrect', 'off'], ['autocapitalize', 'off']]
+      .forEach(([k, v]) => el.setAttribute(k, v));
+    el.spellcheck = false;
+  };
   const reEsc = s => s.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&');
   const pathEsc = s => reEsc(s).replace(/\\\\/g, '\\\\{1,2}');
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1003,7 +1046,7 @@
   // ---------- field map UI ----------
   function buildFieldMap() {
     $('fieldmap').innerHTML = TYPES.map(([t, l]) =>
-      '<label for="fm-' + t + '">' + esc(l) + '</label><input type="text" class="mono" id="fm-' + t + '" data-type="' + t + '" spellcheck="false">').join('');
+      '<label for="fm-' + t + '">' + esc(l) + '</label><input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" class="mono" id="fm-' + t + '" data-type="' + t + '" spellcheck="false">').join('');
     applyPreset('falcon');
     $('fieldmap').addEventListener('input', () => { $('preset').value = 'custom'; render(); });
   }
@@ -1259,7 +1302,7 @@
     const raw = $('b64-in').value.trim();
     const out = $('b64-out');
     const status = $('b64-status');
-    if (!raw) { out.replaceChildren(); status.textContent = ''; return; }
+    if (!raw) { out.innerHTML = '<p class="empty-state">Decoded layers appear here, one per step.</p>'; status.textContent = ''; return; }
 
     let bytes = null, how = '';
     const whole = raw.replace(/\s+/g, '');
@@ -1268,7 +1311,7 @@
     else if (/^[A-Za-z0-9+\/_-]+={0,2}$/.test(whole) && b64Bytes(whole)) { bytes = b64Bytes(whole); how = 'Base64-decoded from the pasted text'; }
     else for (const t of b64Candidates(raw, 16)) { const b = b64Bytes(t); if (b) { bytes = b; how = 'Base64-decoded from the longest encoded string in the pasted text'; break; } }
     if (!bytes) {
-      out.replaceChildren();
+      out.innerHTML = '<p class="empty-state">Nothing decodable found yet.</p>';
       status.textContent = 'Nothing to decode. Paste base64 or URL-encoded text.';
       return;
     }
@@ -1295,6 +1338,7 @@
       if (a.kind === 'text') {
         const ta = el('textarea', 'short layer-text');
         ta.readOnly = true; ta.spellcheck = false; ta.value = a.text;
+        noExt(ta);
         ta.setAttribute('aria-label', 'Decoded text, layer ' + (i + 1));
         const found = indicatorsIn(a.text);
         const acts = el('div', 'actions');
