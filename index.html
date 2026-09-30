@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<title>IOC query builder for Falcon NG-SIEM</title>
+<title>IOC query builder</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23B8740A'/><text x='16' y='22' font-family='monospace' font-size='14' text-anchor='middle' fill='white'>IOC</text></svg>">
 <style>
   :root {
@@ -199,6 +199,12 @@
   .layer { background: var(--bg); }
   .layer-h { font-size: 0.98rem; }
   @media (prefers-reduced-motion: no-preference) { summary::before { transition: transform .15s; } }
+  .platform { display: inline-flex; margin-top: 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 4px; gap: 4px; }
+  .platform a { text-decoration: none; color: var(--muted); font-weight: 600; font-size: 0.95rem; padding: 8px 16px; border-radius: 6px; }
+  .platform a span { font-weight: 400; font-family: var(--mono); font-size: 0.8rem; margin-left: 4px; opacity: 0.8; }
+  .platform a:hover { color: var(--ink); }
+  .platform a[aria-current=page] { background: var(--amber); color: #1A1204; }
+  .platform a:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
   [hidden] { display: none !important; }
   footer { max-width: 1320px; margin: 28px auto 0; color: var(--muted); font-size: 0.85rem; }
   footer p { margin: 0 0 4px; max-width: 90ch; }
@@ -209,8 +215,12 @@
 </head>
 <body>
 <header>
-  <h1>IOC query builder for Falcon NG-SIEM</h1>
-  <p>Paste indicators from an advisory, spreadsheet or report. They are refanged, sorted by type and turned into LogScale searches and lookup files. Everything is processed in this page: nothing you paste is uploaded, and the page blocks all network requests.</p>
+  <h1>IOC query builder</h1>
+  <p>Paste indicators from an advisory, spreadsheet or report. They are refanged, sorted by type and turned into searches and lookup files. Everything is processed in this page: nothing you paste is uploaded, and the page blocks all network requests.</p>
+  <nav class="platform" aria-label="Query language">
+    <a href="#ngsiem" data-plat="ngsiem" aria-current="page">Falcon NG-SIEM <span>LogScale</span></a>
+    <a href="#splunk" data-plat="splunk">Splunk <span>SPL</span></a>
+  </nav>
 </header>
 
 <main>
@@ -294,7 +304,7 @@
       </div>
 
       <div role="tabpanel" id="p-hunt" aria-labelledby="tab-hunt">
-        <p class="hint">Matches the raw event text in any repo or data source. IP matches are exact, and ranges, hashes, paths and file names are handled automatically.</p>
+        <p class="hint" id="hunt-hint">Matches the raw event text in any repo or data source. IP matches are exact, and ranges, hashes, paths and file names are handled automatically.</p>
         <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="hunt-out" readonly spellcheck="false" aria-label="Hunt query"></textarea>
         <div class="actions">
           <button type="button" class="primary" data-copy="hunt-out">Copy query</button>
@@ -349,11 +359,15 @@
           <label for="filters" style="font-size:.95rem">Extra filters, one per line</label>
           <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="filters" spellcheck="false" placeholder="field != value"></textarea>
           <div class="grid2" style="margin-top:12px">
+            <label for="spl-index" data-plat="splunk">Index</label>
+            <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="spl-index" class="mono" data-plat="splunk" value="*">
+            <label for="spl-earliest" data-plat="splunk">Earliest</label>
+            <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="spl-earliest" class="mono" data-plat="splunk" value="-30d">
             <label for="agg">Output</label>
             <select id="agg">
               <option value="none">Raw events</option>
               <option value="table" selected>Table</option>
-              <option value="group">Group by</option>
+              <option value="group">Summarise by</option>
             </select>
             <label for="table-fields" data-for="table">Table fields</label>
             <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="table-fields" class="mono" data-for="table" value="@timestamp, #repo, #event_simpleName, ComputerName, @rawstring">
@@ -361,8 +375,8 @@
             <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="group-fields" class="mono" data-for="group" value="#repo">
             <label for="collect-fields" data-for="group">Collect</label>
             <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="collect-fields" class="mono" data-for="group" placeholder="field1, field2">
-            <label for="tz" data-for="group">Time zone</label>
-            <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="tz" class="mono" data-for="group" value="">
+            <label for="tz" data-for="group" data-plat="ngsiem">Time zone</label>
+            <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="tz" class="mono" data-for="group" data-plat="ngsiem" value="">
           </div>
         </div>
       </details>
@@ -408,7 +422,7 @@
 
 <footer>
   <p>Runs entirely in your browser. The page's content security policy blocks every outbound connection, and downloads are generated locally. Browser extensions are not bound by that policy and can read what you paste, so use a browser profile with no extensions for restricted material. Grammarly is told to ignore every field.</p>
-  <p>Supports IPv4, CIDR, SHA256, SHA1, MD5, domains, URLs, paths and file names. Octets above 255 and invalid CIDR prefixes are rejected.</p>
+  <p>Builds CrowdStrike Falcon NG-SIEM (LogScale) and Splunk (SPL) searches. Supports IPv4, CIDR, SHA256, SHA1, MD5, domains, URLs, paths and file names. Octets above 255 and invalid CIDR prefixes are rejected.</p>
 </footer>
 
 <script>
@@ -436,6 +450,18 @@
   const FILE_EXT_SET = new Set(FILE_EXT.split('|'));
 
   const PRESETS = {
+    cim: {
+      ip: 'src_ip, dest_ip', cidr: 'src_ip, dest_ip',
+      sha256: 'file_hash', sha1: 'file_hash', md5: 'file_hash',
+      domain: 'query, url_domain', url: 'url',
+      path: 'uri_path, file_path, process_path', filename: 'file_name, process_name'
+    },
+    sysmon: {
+      ip: 'SourceIp, DestinationIp', cidr: 'SourceIp, DestinationIp',
+      sha256: 'SHA256', sha1: 'SHA1', md5: 'MD5',
+      domain: 'QueryName', url: '',
+      path: 'Image, TargetFilename', filename: 'Image, TargetFilename'
+    },
     falcon: {
       ip: 'RemoteAddressIP4', cidr: 'RemoteAddressIP4',
       sha256: 'SHA256HashData', sha1: 'SHA1HashData', md5: 'MD5HashData',
@@ -1007,9 +1033,10 @@
     }
 
     $('lookup-name').placeholder = (slug($('source').value) || 'ioc_lookup') + '.csv';
-    const hunt = buildHunt(g);
-    const fielded = buildFielded(g);
-    const lookup = buildLookup(g);
+    const spl = platform === 'splunk';
+    const hunt = spl ? buildHuntSpl(g) : buildHunt(g);
+    const fielded = spl ? buildFieldedSpl(g) : buildFielded(g);
+    const lookup = spl ? buildLookupSpl(g) : buildLookup(g);
     $('hunt-out').value = hunt.text;
     $('field-out').value = fielded.text;
     $('csv-out').value = lookup.csv;
@@ -1043,6 +1070,239 @@
     $('notes').innerHTML = notes.map(([c, h]) => '<li class="' + c + '">' + h + '</li>').join('');
   }
 
+  // ---------- Splunk SPL builders ----------
+  const splStr = v => '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  const splComment = t => '``` ' + String(t).replace(/`/g, "'") + ' ```';
+  const splField = f => /^[A-Za-z_][\w.]*$/.test(f) ? f : splStr(f);
+  const splEvalField = f => "'" + f.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+
+  function splBase() {
+    const idx = splitList($('spl-index').value);
+    const idxPart = !idx.length ? 'index=*' : idx.length === 1 ? 'index=' + idx[0] : '(' + idx.map(i => 'index=' + i).join(' OR ') + ')';
+    const earliest = $('spl-earliest').value.trim();
+    return idxPart + (earliest ? ' earliest=' + earliest + ' latest=now' : '');
+  }
+
+  function splHeader(g, kind) {
+    const src = $('source').value.trim() || 'IOC hunt';
+    return [
+      splComment(src + ', ' + $('tlp').value + (/(AMBER|RED)/.test($('tlp').value) ? ' (restricted sharing)' : '')),
+      splComment('Generated ' + today() + ': ' + countsLine(g)),
+      splComment(kind)
+    ];
+  }
+
+  function splTail() {
+    const out = [];
+    $('filters').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+      .forEach(l => out.push(l.startsWith('|') ? l : '| search ' + l));
+    const agg = $('agg').value;
+    if (agg === 'table') {
+      const f = splitList($('table-fields').value);
+      if (f.length) out.push('| table ' + f.join(' '));
+    } else if (agg === 'group') {
+      const f = splitList($('group-fields').value);
+      const c = splitList($('collect-fields').value);
+      if (f.length) {
+        out.push('| stats count AS hits min(_time) AS first_seen max(_time) AS last_seen' + c.map(x => ' values(' + x + ') AS ' + x).join('') + ' BY ' + f.join(' '));
+        out.push('| sort 0 - last_seen');
+        out.push('| convert ctime(first_seen) ctime(last_seen)');
+      }
+    }
+    return out;
+  }
+
+  // CIDR ranges become exact terms: single IPs for /25 and smaller, otherwise /24, /16 or /8 wildcard terms.
+  function cidrTerms(c) {
+    const p = c.prefix, base = c.net;
+    if (p === 32) return [splStr(intToIp(base))];
+    if (p >= 25) {
+      const out = [];
+      for (let i = 0; i < Math.pow(2, 32 - p); i++) out.push(splStr(intToIp(base + i)));
+      return out;
+    }
+    const step = p >= 17 ? 24 : p >= 9 ? 16 : 8;
+    const wild = n => intToIp(n).split('.').slice(0, step / 8).join('.') + '.*';
+    const count = Math.pow(2, step - p), size = Math.pow(2, 32 - step), out = [];
+    for (let i = 0; i < count; i++) out.push(wild(base + i * size));
+    return out;
+  }
+
+  function orLines(blocks) {
+    // blocks: [comment, terms[]]; returns lines with OR joins, 6 terms per line
+    const lines = [];
+    let first = true;
+    blocks.forEach(([c, terms]) => {
+      lines.push('  ' + splComment(c));
+      for (let i = 0; i < terms.length; i += 6) {
+        lines.push('  ' + (first ? '' : 'OR ') + terms.slice(i, i + 6).join(' OR '));
+        first = false;
+      }
+    });
+    return lines;
+  }
+
+  function buildHuntSpl(g) {
+    const blocks = [], notes = [];
+    if (g.ip.length || g.cidr.length) {
+      const cterms = g.cidr.flatMap(c => cidrTerms(c.cidr));
+      const label = [g.ip.length ? g.ip.length + ' IPv4' : '', g.cidr.length ? g.cidr.length + ' CIDR (' + g.cidr.map(c => c.value).join(', ') + ', as ' + cterms.length + ' term' + (cterms.length === 1 ? '' : 's') + ')' : ''].filter(Boolean).join(' and ');
+      blocks.push([label, g.ip.map(i => splStr(i.value)).concat(cterms)]);
+    }
+    const hashes = HASH_TYPES.flatMap(t => g[t]);
+    if (hashes.length) blocks.push(['Hashes: ' + HASH_TYPES.filter(t => g[t].length).map(t => g[t].length + ' ' + LABEL[t]).join(', '), hashes.map(h => splStr(h.value))]);
+    if (g.domain.length) blocks.push([g.domain.length + ' domain' + (g.domain.length === 1 ? '' : 's') + ', subdomains included', g.domain.map(d => splStr(d.value))]);
+    if (g.url.length) blocks.push([g.url.length + ' URL' + (g.url.length === 1 ? '' : 's') + encNote(g.url), g.url.flatMap(variants).map(splStr)]);
+    let paths = g.path;
+    if ($('collapse').checked && g.filename.length && paths.length) {
+      const names = new Set(g.filename.map(f => f.value.toLowerCase()));
+      const covered = paths.filter(p => !p.alts.size && names.has(p.value.split(/[\/\\]/).pop().toLowerCase()));
+      if (covered.length) notes.push(covered.length + ' path' + (covered.length === 1 ? ' is' : 's are') + ' left out of the hunt query because a file name IOC already matches ' + (covered.length === 1 ? 'it' : 'them') + '.');
+      paths = paths.filter(p => !covered.includes(p));
+    }
+    if (paths.length) {
+      const pv = paths.flatMap(variants);
+      const terms = pv.flatMap(v => v.includes('\\') ? [v, v.replace(/\\/g, '\\\\')] : [v]).map(splStr);
+      blocks.push([paths.length + ' path' + (paths.length === 1 ? '' : 's') + ' or URI' + (paths.length === 1 ? '' : 's') + encNote(paths) + (pv.some(v => v.includes('\\')) ? ', Windows paths also in JSON-escaped form' : ''), terms]);
+    }
+    if (g.filename.length) blocks.push([g.filename.length + ' file name' + (g.filename.length === 1 ? '' : 's') + encNote(g.filename), g.filename.flatMap(variants).map(splStr)]);
+    if (!blocks.length) return { text: '', notes };
+    const lines = splHeader(g, 'Term search across raw events in every index. Terms match whole values, so 10.0.0.1 never hits 10.0.0.15.');
+    lines.push(splBase(), '(', ...orLines(blocks), ')');
+    const t = splTail();
+    if (t.length) lines.push(...t);
+    return { text: lines.join('\n'), notes };
+  }
+
+  // Returns [searchExpr, evalCondition] for one type and field.
+  function splBranch(t, f, items) {
+    const sf = splField(f), ef = splEvalField(f), lf = 'lower(' + ef + ')';
+    const vals = items.map(i => i.value), vv = items.flatMap(variants);
+    const low = a => a.map(v => splStr(v.toLowerCase()));
+    switch (t) {
+      case 'ip': return [sf + ' IN (' + vals.map(splStr).join(', ') + ')', 'in(' + ef + ', ' + vals.map(splStr).join(', ') + ')'];
+      case 'cidr': return ['(' + vals.map(v => sf + '=' + v).join(' OR ') + ')', vals.map(v => 'cidrmatch(' + splStr(v) + ', ' + ef + ')').join(' OR ')];
+      case 'sha256': case 'sha1': case 'md5':
+        return [sf + ' IN (' + vals.map(splStr).join(', ') + ')', 'in(' + lf + ', ' + low(vals).join(', ') + ')'];
+      case 'domain': return [
+        sf + ' IN (' + vals.flatMap(v => [v, '*.' + v]).map(splStr).join(', ') + ')',
+        'in(' + lf + ', ' + low(vals).join(', ') + ') OR ' + vals.map(v => 'like(' + lf + ', ' + splStr('%.' + v.toLowerCase()) + ')').join(' OR ')];
+      case 'url': case 'path': return [
+        sf + ' IN (' + vv.map(v => splStr('*' + v + '*')).join(', ') + ')',
+        vv.map(v => 'like(' + lf + ', ' + splStr('%' + v.toLowerCase() + '%') + ')').join(' OR ')];
+      case 'filename': return [
+        sf + ' IN (' + vv.flatMap(v => [v, '*\\' + v, '*/' + v]).map(splStr).join(', ') + ')',
+        vv.map(v => lf + '=' + splStr(v.toLowerCase()) + ' OR like(' + lf + ', ' + splStr('%\\' + v.toLowerCase()) + ') OR like(' + lf + ', ' + splStr('%/' + v.toLowerCase()) + ')').join(' OR ')];
+    }
+    return ['', ''];
+  }
+
+  function buildFieldedSpl(g) {
+    const branches = [], skipped = [];
+    TYPES.forEach(([t, l]) => {
+      if (!g[t].length) return;
+      const fs = fieldsFor(t);
+      if (!fs.length) { skipped.push(g[t].length + ' ' + l); return; }
+      fs.forEach(f => { const [s, c] = splBranch(t, f, g[t]); branches.push({ s, c, tag: t + '|' + f }); });
+    });
+    if (!branches.length) return { text: '', skipped };
+    const lines = splHeader(g, 'Fielded match. Each hit is tagged with ioc_type and ioc_field.');
+    if (skipped.length) lines.push(splComment('Not included, no field set: ' + skipped.join(', ')));
+    lines.push(splBase(), '(');
+    branches.forEach((b, i) => lines.push('  ' + (i ? 'OR ' : '') + b.s));
+    lines.push(')');
+    lines.push('| eval ioc_hit=case(');
+    branches.forEach((b, i) => lines.push('    ' + b.c + ', ' + splStr(b.tag) + (i < branches.length - 1 ? ',' : '')));
+    lines.push('  )');
+    lines.push('| eval ioc_type=mvindex(split(ioc_hit, "|"), 0), ioc_field=mvindex(split(ioc_hit, "|"), 1)');
+    lines.push('| fields - ioc_hit');
+    const t = splTail();
+    if (t.length) lines.push(...t);
+    return { text: lines.join('\n'), skipped };
+  }
+
+  function buildLookupSpl(g) {
+    const base = buildLookup(g);
+    const name = lookupNames().main;
+    const byField = new Map(), left = [];
+    TYPES.forEach(([t, l]) => {
+      if (!g[t].length) return;
+      if (t === 'path' || t === 'filename') { left.push(g[t].length + ' ' + l + ' (exact match unsuitable)'); return; }
+      const fs = fieldsFor(t);
+      if (!fs.length) { left.push(g[t].length + ' ' + l + ' (no field set)'); return; }
+      fs.forEach(f => { if (!byField.has(f)) byField.set(f, []); byField.get(f).push(t); });
+    });
+    let text = '';
+    if (byField.size) {
+      const lines = splHeader(g, 'Lookup match. Upload ' + name + ' as a lookup table file first.');
+      if (left.length) lines.push(splComment('Not included: ' + left.join(', ')));
+      if (g.cidr.length) lines.push(splComment('CIDR rows filter the search; enrichment for them needs a CIDR lookup definition.'));
+      lines.push(splBase(), '(');
+      [...byField].forEach(([f, types], i) => {
+        const where = types.length === 1 ? 'ioc_type=' + splStr(types[0]) : 'ioc_type IN (' + types.map(splStr).join(', ') + ')';
+        lines.push('  ' + (i ? 'OR ' : '') + '[| inputlookup ' + name + ' where ' + where + ' | rename indicator AS ' + splField(f) + ' | fields ' + splField(f) + ']');
+      });
+      lines.push(')');
+      [...byField.keys()].forEach(f => lines.push('| lookup ' + name + ' indicator AS ' + splField(f) + ' OUTPUTNEW ioc_type ioc_tlp ioc_comment'));
+      const t = splTail();
+      if (t.length) lines.push(...t);
+      text = lines.join('\n');
+    }
+    return { csv: base.csv, cidrCsv: '', text };
+  }
+
+  // ---------- platform switching ----------
+  const SHAPE_KEYS = ['filters', 'agg', 'table-fields', 'group-fields', 'collect-fields'];
+  const PLAT = {
+    ngsiem: {
+      title: 'Falcon NG-SIEM',
+      presets: [['falcon', 'Falcon endpoint telemetry'], ['ecs', 'Normalised (ECS) network and web logs'], ['custom', 'Custom']],
+      preset: 'falcon', fm: null,
+      shape: { filters: '', agg: 'table', 'table-fields': '@timestamp, #repo, #event_simpleName, ComputerName, @rawstring', 'group-fields': '#repo', 'collect-fields': '' },
+      huntHint: 'Matches the raw event text in any repo or data source. IP matches are exact, and ranges, hashes, paths and file names are handled automatically.',
+      filterPh: 'field != value'
+    },
+    splunk: {
+      title: 'Splunk',
+      presets: [['cim', 'Splunk CIM data models'], ['sysmon', 'Sysmon (Splunk Add-on)'], ['custom', 'Custom']],
+      preset: 'cim', fm: null,
+      shape: { filters: '', agg: 'table', 'table-fields': '_time, index, sourcetype, host, source, _raw', 'group-fields': 'index, sourcetype', 'collect-fields': '' },
+      huntHint: 'Term search across raw events in every index. IP terms match whole values, and ranges are expanded into exact terms.',
+      filterPh: 'field!=value'
+    }
+  };
+  let platform = 'ngsiem';
+
+  function saveState() {
+    const s = PLAT[platform];
+    s.preset = $('preset').value;
+    s.fm = Object.fromEntries(TYPES.map(([t]) => [t, $('fm-' + t).value]));
+    SHAPE_KEYS.forEach(k => { s.shape[k] = $(k).value; });
+  }
+  function loadState() {
+    const s = PLAT[platform];
+    $('preset').innerHTML = s.presets.map(([v, l]) => '<option value="' + v + '">' + esc(l) + '</option>').join('');
+    $('preset').value = s.preset;
+    if (s.fm) TYPES.forEach(([t]) => { $('fm-' + t).value = s.fm[t] || ''; });
+    else applyPreset(s.preset);
+    SHAPE_KEYS.forEach(k => { $(k).value = s.shape[k]; });
+    $('filters').placeholder = s.filterPh;
+    $('hunt-hint').textContent = s.huntHint;
+    document.querySelectorAll('.platform a').forEach(a => {
+      if (a.dataset.plat === platform) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    document.title = 'IOC query builder: ' + s.title;
+    syncAgg();
+  }
+  function setPlatform(p) {
+    if (!PLAT[p] || p === platform) return;
+    saveState();
+    platform = p;
+    loadState();
+    render();
+  }
+  window.addEventListener('hashchange', () => setPlatform(location.hash === '#splunk' ? 'splunk' : 'ngsiem'));
+
   // ---------- field map UI ----------
   function buildFieldMap() {
     $('fieldmap').innerHTML = TYPES.map(([t, l]) =>
@@ -1058,7 +1318,11 @@
 
   function syncAgg() {
     const v = $('agg').value;
-    document.querySelectorAll('[data-for]').forEach(el => { el.hidden = el.dataset.for !== v; });
+    document.querySelectorAll('[data-for], .grid2 [data-plat]').forEach(el => {
+      const forOk = !el.dataset.for || el.dataset.for === v;
+      const platOk = !el.dataset.plat || el.dataset.plat === platform;
+      el.hidden = !(forOk && platOk);
+    });
   }
 
   // ---------- tabs ----------
@@ -1406,13 +1670,14 @@
   $('tlp').addEventListener('change', () => { tlpTouched = true; render(); });
   $('preset').addEventListener('change', () => { applyPreset($('preset').value); render(); });
   $('agg').addEventListener('change', () => { syncAgg(); render(); });
-  ['input', 'source', 'allowlist', 'filters', 'table-fields', 'group-fields', 'collect-fields', 'tz', 'lookup-name']
+  ['input', 'source', 'allowlist', 'filters', 'table-fields', 'group-fields', 'collect-fields', 'tz', 'lookup-name', 'spl-index', 'spl-earliest']
     .forEach(id => $(id).addEventListener('input', render));
   ['sort', 'collapse', 'inline-b64', 'url-dec'].forEach(id => $(id).addEventListener('change', render));
 
   try { $('tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* leave blank */ }
   buildFieldMap();
   syncAgg();
+  if (location.hash === '#splunk') setPlatform('splunk');
   renderSessions();
   render();
 })();
