@@ -211,19 +211,39 @@
   @media (prefers-reduced-motion: no-preference) {
     button, .chip { transition: background-color .15s, border-color .15s; }
   }
+
+  /* ---- Sigma view ---- */
+  #sg-rule { min-height: 360px; }
+  #sg-pipe { min-height: 200px; }
+  #sg-rule.drop { background: var(--amber-soft); }
+  textarea.sg-q[readonly] { min-height: 84px; white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: hidden; }
+  .actions select { max-width: 100%; }
+  .layer + .layer { margin-top: 16px; }
+  .layer .sub:first-of-type { margin-top: 14px; }
+  .lvl { font: 600 0.72rem var(--sans); text-transform: uppercase; letter-spacing: 0.06em; border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px; margin-left: 10px; vertical-align: middle; color: var(--muted); }
+  .lvl-low { color: var(--ok); }
+  .lvl-medium { color: var(--amber-text); }
+  .lvl-high, .lvl-critical { color: var(--warn); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+  .tag { font: 0.8rem var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px; background: var(--surface); color: var(--ink); text-decoration: none; }
+  a.tag { color: var(--amber-text); }
+  a.tag:hover { border-color: var(--amber); }
+  #sg-results > .notes:first-child { margin-top: 0; }
+  #sg-count { margin: 0 0 8px; }
 </style>
 </head>
 <body>
 <header>
   <h1>IOC query builder</h1>
-  <p>Paste indicators from an advisory, spreadsheet or report. They are refanged, sorted by type and turned into searches and lookup files. Everything is processed in this page: nothing you paste is uploaded, and the page blocks all network requests.</p>
+  <p id="intro">Paste indicators from an advisory, spreadsheet or report. They are refanged, sorted by type and turned into searches and lookup files. Everything is processed in this page: nothing you paste is uploaded, and the page blocks all network requests.</p>
   <nav class="platform" aria-label="Query language">
     <a href="#ngsiem" data-plat="ngsiem" aria-current="page">Falcon NG-SIEM <span>LogScale</span></a>
     <a href="#splunk" data-plat="splunk">Splunk <span>SPL</span></a>
+    <a href="#sigma" data-plat="sigma">Sigma <span>rules</span></a>
   </nav>
 </header>
 
-<main>
+<main id="ioc-main">
   <div class="col">
     <section aria-labelledby="in-h">
       <h2 id="in-h">Indicators</h2>
@@ -420,9 +440,70 @@
   </section>
 </main>
 
+<main id="sigma-main" hidden>
+  <div class="col">
+    <section aria-labelledby="sg-in-h">
+      <h2 id="sg-in-h">Sigma rule</h2>
+      <p class="hint">Paste a Sigma rule or open a <code>.yml</code> file. Several rules in one file are fine when separated by a line containing three dashes. The YAML is read in this page and sent nowhere.</p>
+      <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="sg-rule" spellcheck="false" aria-label="Sigma rule"></textarea>
+      <div class="actions">
+        <select id="sg-example" aria-label="Load an example"></select>
+        <button type="button" id="sg-open">Open file</button>
+        <button type="button" id="sg-clear">Clear</button>
+        <input type="file" id="sg-file" accept=".yml,.yaml,.txt" hidden>
+      </div>
+
+      <details>
+        <summary>Processing pipeline</summary>
+        <div class="inner">
+          <p class="hint">Maps Sigma field names to your telemetry and adds conditions before conversion. Leave it empty to keep the field names as written in the rule.</p>
+          <div class="grid2">
+            <label for="sg-preset">Preset</label>
+            <select id="sg-preset"></select>
+          </div>
+          <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="sg-pipe" spellcheck="false" aria-label="Processing pipeline" style="margin-top:10px"></textarea>
+          <p class="hint" id="sg-pipe-status" role="status" style="margin:8px 0 0"></p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Options</summary>
+        <div class="inner grid2">
+          <label for="sg-ls">NG-SIEM matching</label>
+          <select id="sg-ls">
+            <option value="regex">Regex, case insensitive</option>
+            <option value="wildcard">Wildcards, case sensitive</option>
+          </select>
+          <label for="sg-table">KQL table</label>
+          <input type="text" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" autocomplete="off" autocorrect="off" autocapitalize="off" id="sg-table" class="mono" spellcheck="false" placeholder="DeviceProcessEvents">
+        </div>
+      </details>
+
+      <details>
+        <summary>What this supports</summary>
+        <div class="inner">
+          <p class="hint">Selections as maps, lists of maps and keyword lists. Conditions with <code>and</code>, <code>or</code>, <code>not</code>, brackets, <code>1 of</code>, <code>all of</code> and <code>them</code>. Modifiers <code>contains</code>, <code>startswith</code>, <code>endswith</code>, <code>all</code>, <code>re</code>, <code>cidr</code>, <code>exists</code>, <code>cased</code>, <code>fieldref</code>, <code>gt</code>, <code>gte</code>, <code>lt</code>, <code>lte</code>, <code>base64</code>, <code>base64offset</code>, <code>wide</code>, <code>utf16le</code>, <code>utf16be</code>, <code>utf16</code> and <code>windash</code>.</p>
+          <p class="hint">Pipelines support <code>field_name_mapping</code>, <code>field_name_prefix</code>, <code>drop_detection_item</code> (with <code>fields</code>), <code>add_condition</code> and <code>set_state</code>, with <code>logsource</code> rule conditions. The presets are starting points, so check the field names against your own data.</p>
+          <p class="hint">Not supported: <code>count()</code> and <code>near</code> aggregations, correlation rules, <code>action: global</code> and <code>expand</code> placeholders. This is a JavaScript reimplementation, not pySigma itself, so test generated queries before deploying them.</p>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <div class="col">
+    <section aria-labelledby="sg-out-h">
+      <h2 id="sg-out-h">Converted queries</h2>
+      <p class="hint" id="sg-count" aria-live="polite"></p>
+      <div class="tabs" role="tablist" aria-label="Target query language" id="sg-tabs"></div>
+      <div role="tabpanel" id="sg-results"></div>
+    </section>
+  </div>
+</main>
+
 <footer>
   <p>Runs entirely in your browser. The page's content security policy blocks every outbound connection, and downloads are generated locally. Browser extensions are not bound by that policy and can read what you paste, so use a browser profile with no extensions for restricted material. Grammarly is told to ignore every field.</p>
   <p>Builds CrowdStrike Falcon NG-SIEM (LogScale) and Splunk (SPL) searches. Supports IPv4, CIDR, SHA256, SHA1, MD5, domains, URLs, paths and file names. Octets above 255 and invalid CIDR prefixes are rejected.</p>
+  <p>The Sigma tab converts Sigma rules to Falcon NG-SIEM, Splunk, Elastic Lucene and Microsoft KQL with a parser built into this page. It makes no network requests either.</p>
 </footer>
 
 <script>
@@ -1301,7 +1382,7 @@
     loadState();
     render();
   }
-  window.addEventListener('hashchange', () => setPlatform(location.hash === '#splunk' ? 'splunk' : 'ngsiem'));
+  window.addEventListener('hashchange', () => { if (location.hash !== '#sigma') setPlatform(location.hash === '#splunk' ? 'splunk' : 'ngsiem'); });
 
   // ---------- field map UI ----------
   function buildFieldMap() {
@@ -1680,6 +1761,1169 @@
   if (location.hash === '#splunk') setPlatform('splunk');
   renderSessions();
   render();
+})();
+</script>
+<script>
+/*! js-yaml 4.1.0 https://github.com/nodeca/js-yaml @license MIT */
+!function(e,t){"object"==typeof exports&&"undefined"!=typeof module?t(exports):"function"==typeof define&&define.amd?define(["exports"],t):t((e="undefined"!=typeof globalThis?globalThis:e||self).jsyaml={})}(this,(function(e){"use strict";function t(e){return null==e}var n={isNothing:t,isObject:function(e){return"object"==typeof e&&null!==e},toArray:function(e){return Array.isArray(e)?e:t(e)?[]:[e]},repeat:function(e,t){var n,i="";for(n=0;n<t;n+=1)i+=e;return i},isNegativeZero:function(e){return 0===e&&Number.NEGATIVE_INFINITY===1/e},extend:function(e,t){var n,i,r,o;if(t)for(n=0,i=(o=Object.keys(t)).length;n<i;n+=1)e[r=o[n]]=t[r];return e}};function i(e,t){var n="",i=e.reason||"(unknown reason)";return e.mark?(e.mark.name&&(n+='in "'+e.mark.name+'" '),n+="("+(e.mark.line+1)+":"+(e.mark.column+1)+")",!t&&e.mark.snippet&&(n+="\n\n"+e.mark.snippet),i+" "+n):i}function r(e,t){Error.call(this),this.name="YAMLException",this.reason=e,this.mark=t,this.message=i(this,!1),Error.captureStackTrace?Error.captureStackTrace(this,this.constructor):this.stack=(new Error).stack||""}r.prototype=Object.create(Error.prototype),r.prototype.constructor=r,r.prototype.toString=function(e){return this.name+": "+i(this,e)};var o=r;function a(e,t,n,i,r){var o="",a="",l=Math.floor(r/2)-1;return i-t>l&&(t=i-l+(o=" ... ").length),n-i>l&&(n=i+l-(a=" ...").length),{str:o+e.slice(t,n).replace(/\t/g,"→")+a,pos:i-t+o.length}}function l(e,t){return n.repeat(" ",t-e.length)+e}var c=function(e,t){if(t=Object.create(t||null),!e.buffer)return null;t.maxLength||(t.maxLength=79),"number"!=typeof t.indent&&(t.indent=1),"number"!=typeof t.linesBefore&&(t.linesBefore=3),"number"!=typeof t.linesAfter&&(t.linesAfter=2);for(var i,r=/\r?\n|\r|\0/g,o=[0],c=[],s=-1;i=r.exec(e.buffer);)c.push(i.index),o.push(i.index+i[0].length),e.position<=i.index&&s<0&&(s=o.length-2);s<0&&(s=o.length-1);var u,p,f="",d=Math.min(e.line+t.linesAfter,c.length).toString().length,h=t.maxLength-(t.indent+d+3);for(u=1;u<=t.linesBefore&&!(s-u<0);u++)p=a(e.buffer,o[s-u],c[s-u],e.position-(o[s]-o[s-u]),h),f=n.repeat(" ",t.indent)+l((e.line-u+1).toString(),d)+" | "+p.str+"\n"+f;for(p=a(e.buffer,o[s],c[s],e.position,h),f+=n.repeat(" ",t.indent)+l((e.line+1).toString(),d)+" | "+p.str+"\n",f+=n.repeat("-",t.indent+d+3+p.pos)+"^\n",u=1;u<=t.linesAfter&&!(s+u>=c.length);u++)p=a(e.buffer,o[s+u],c[s+u],e.position-(o[s]-o[s+u]),h),f+=n.repeat(" ",t.indent)+l((e.line+u+1).toString(),d)+" | "+p.str+"\n";return f.replace(/\n$/,"")},s=["kind","multi","resolve","construct","instanceOf","predicate","represent","representName","defaultStyle","styleAliases"],u=["scalar","sequence","mapping"];var p=function(e,t){if(t=t||{},Object.keys(t).forEach((function(t){if(-1===s.indexOf(t))throw new o('Unknown option "'+t+'" is met in definition of "'+e+'" YAML type.')})),this.options=t,this.tag=e,this.kind=t.kind||null,this.resolve=t.resolve||function(){return!0},this.construct=t.construct||function(e){return e},this.instanceOf=t.instanceOf||null,this.predicate=t.predicate||null,this.represent=t.represent||null,this.representName=t.representName||null,this.defaultStyle=t.defaultStyle||null,this.multi=t.multi||!1,this.styleAliases=function(e){var t={};return null!==e&&Object.keys(e).forEach((function(n){e[n].forEach((function(e){t[String(e)]=n}))})),t}(t.styleAliases||null),-1===u.indexOf(this.kind))throw new o('Unknown kind "'+this.kind+'" is specified for "'+e+'" YAML type.')};function f(e,t){var n=[];return e[t].forEach((function(e){var t=n.length;n.forEach((function(n,i){n.tag===e.tag&&n.kind===e.kind&&n.multi===e.multi&&(t=i)})),n[t]=e})),n}function d(e){return this.extend(e)}d.prototype.extend=function(e){var t=[],n=[];if(e instanceof p)n.push(e);else if(Array.isArray(e))n=n.concat(e);else{if(!e||!Array.isArray(e.implicit)&&!Array.isArray(e.explicit))throw new o("Schema.extend argument should be a Type, [ Type ], or a schema definition ({ implicit: [...], explicit: [...] })");e.implicit&&(t=t.concat(e.implicit)),e.explicit&&(n=n.concat(e.explicit))}t.forEach((function(e){if(!(e instanceof p))throw new o("Specified list of YAML types (or a single Type object) contains a non-Type object.");if(e.loadKind&&"scalar"!==e.loadKind)throw new o("There is a non-scalar type in the implicit list of a schema. Implicit resolving of such types is not supported.");if(e.multi)throw new o("There is a multi type in the implicit list of a schema. Multi tags can only be listed as explicit.")})),n.forEach((function(e){if(!(e instanceof p))throw new o("Specified list of YAML types (or a single Type object) contains a non-Type object.")}));var i=Object.create(d.prototype);return i.implicit=(this.implicit||[]).concat(t),i.explicit=(this.explicit||[]).concat(n),i.compiledImplicit=f(i,"implicit"),i.compiledExplicit=f(i,"explicit"),i.compiledTypeMap=function(){var e,t,n={scalar:{},sequence:{},mapping:{},fallback:{},multi:{scalar:[],sequence:[],mapping:[],fallback:[]}};function i(e){e.multi?(n.multi[e.kind].push(e),n.multi.fallback.push(e)):n[e.kind][e.tag]=n.fallback[e.tag]=e}for(e=0,t=arguments.length;e<t;e+=1)arguments[e].forEach(i);return n}(i.compiledImplicit,i.compiledExplicit),i};var h=d,g=new p("tag:yaml.org,2002:str",{kind:"scalar",construct:function(e){return null!==e?e:""}}),m=new p("tag:yaml.org,2002:seq",{kind:"sequence",construct:function(e){return null!==e?e:[]}}),y=new p("tag:yaml.org,2002:map",{kind:"mapping",construct:function(e){return null!==e?e:{}}}),b=new h({explicit:[g,m,y]});var A=new p("tag:yaml.org,2002:null",{kind:"scalar",resolve:function(e){if(null===e)return!0;var t=e.length;return 1===t&&"~"===e||4===t&&("null"===e||"Null"===e||"NULL"===e)},construct:function(){return null},predicate:function(e){return null===e},represent:{canonical:function(){return"~"},lowercase:function(){return"null"},uppercase:function(){return"NULL"},camelcase:function(){return"Null"},empty:function(){return""}},defaultStyle:"lowercase"});var v=new p("tag:yaml.org,2002:bool",{kind:"scalar",resolve:function(e){if(null===e)return!1;var t=e.length;return 4===t&&("true"===e||"True"===e||"TRUE"===e)||5===t&&("false"===e||"False"===e||"FALSE"===e)},construct:function(e){return"true"===e||"True"===e||"TRUE"===e},predicate:function(e){return"[object Boolean]"===Object.prototype.toString.call(e)},represent:{lowercase:function(e){return e?"true":"false"},uppercase:function(e){return e?"TRUE":"FALSE"},camelcase:function(e){return e?"True":"False"}},defaultStyle:"lowercase"});function w(e){return 48<=e&&e<=55}function k(e){return 48<=e&&e<=57}var C=new p("tag:yaml.org,2002:int",{kind:"scalar",resolve:function(e){if(null===e)return!1;var t,n,i=e.length,r=0,o=!1;if(!i)return!1;if("-"!==(t=e[r])&&"+"!==t||(t=e[++r]),"0"===t){if(r+1===i)return!0;if("b"===(t=e[++r])){for(r++;r<i;r++)if("_"!==(t=e[r])){if("0"!==t&&"1"!==t)return!1;o=!0}return o&&"_"!==t}if("x"===t){for(r++;r<i;r++)if("_"!==(t=e[r])){if(!(48<=(n=e.charCodeAt(r))&&n<=57||65<=n&&n<=70||97<=n&&n<=102))return!1;o=!0}return o&&"_"!==t}if("o"===t){for(r++;r<i;r++)if("_"!==(t=e[r])){if(!w(e.charCodeAt(r)))return!1;o=!0}return o&&"_"!==t}}if("_"===t)return!1;for(;r<i;r++)if("_"!==(t=e[r])){if(!k(e.charCodeAt(r)))return!1;o=!0}return!(!o||"_"===t)},construct:function(e){var t,n=e,i=1;if(-1!==n.indexOf("_")&&(n=n.replace(/_/g,"")),"-"!==(t=n[0])&&"+"!==t||("-"===t&&(i=-1),t=(n=n.slice(1))[0]),"0"===n)return 0;if("0"===t){if("b"===n[1])return i*parseInt(n.slice(2),2);if("x"===n[1])return i*parseInt(n.slice(2),16);if("o"===n[1])return i*parseInt(n.slice(2),8)}return i*parseInt(n,10)},predicate:function(e){return"[object Number]"===Object.prototype.toString.call(e)&&e%1==0&&!n.isNegativeZero(e)},represent:{binary:function(e){return e>=0?"0b"+e.toString(2):"-0b"+e.toString(2).slice(1)},octal:function(e){return e>=0?"0o"+e.toString(8):"-0o"+e.toString(8).slice(1)},decimal:function(e){return e.toString(10)},hexadecimal:function(e){return e>=0?"0x"+e.toString(16).toUpperCase():"-0x"+e.toString(16).toUpperCase().slice(1)}},defaultStyle:"decimal",styleAliases:{binary:[2,"bin"],octal:[8,"oct"],decimal:[10,"dec"],hexadecimal:[16,"hex"]}}),x=new RegExp("^(?:[-+]?(?:[0-9][0-9_]*)(?:\\.[0-9_]*)?(?:[eE][-+]?[0-9]+)?|\\.[0-9_]+(?:[eE][-+]?[0-9]+)?|[-+]?\\.(?:inf|Inf|INF)|\\.(?:nan|NaN|NAN))$");var I=/^[-+]?[0-9]+e/;var S=new p("tag:yaml.org,2002:float",{kind:"scalar",resolve:function(e){return null!==e&&!(!x.test(e)||"_"===e[e.length-1])},construct:function(e){var t,n;return n="-"===(t=e.replace(/_/g,"").toLowerCase())[0]?-1:1,"+-".indexOf(t[0])>=0&&(t=t.slice(1)),".inf"===t?1===n?Number.POSITIVE_INFINITY:Number.NEGATIVE_INFINITY:".nan"===t?NaN:n*parseFloat(t,10)},predicate:function(e){return"[object Number]"===Object.prototype.toString.call(e)&&(e%1!=0||n.isNegativeZero(e))},represent:function(e,t){var i;if(isNaN(e))switch(t){case"lowercase":return".nan";case"uppercase":return".NAN";case"camelcase":return".NaN"}else if(Number.POSITIVE_INFINITY===e)switch(t){case"lowercase":return".inf";case"uppercase":return".INF";case"camelcase":return".Inf"}else if(Number.NEGATIVE_INFINITY===e)switch(t){case"lowercase":return"-.inf";case"uppercase":return"-.INF";case"camelcase":return"-.Inf"}else if(n.isNegativeZero(e))return"-0.0";return i=e.toString(10),I.test(i)?i.replace("e",".e"):i},defaultStyle:"lowercase"}),O=b.extend({implicit:[A,v,C,S]}),j=O,T=new RegExp("^([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9])$"),N=new RegExp("^([0-9][0-9][0-9][0-9])-([0-9][0-9]?)-([0-9][0-9]?)(?:[Tt]|[ \\t]+)([0-9][0-9]?):([0-9][0-9]):([0-9][0-9])(?:\\.([0-9]*))?(?:[ \\t]*(Z|([-+])([0-9][0-9]?)(?::([0-9][0-9]))?))?$");var F=new p("tag:yaml.org,2002:timestamp",{kind:"scalar",resolve:function(e){return null!==e&&(null!==T.exec(e)||null!==N.exec(e))},construct:function(e){var t,n,i,r,o,a,l,c,s=0,u=null;if(null===(t=T.exec(e))&&(t=N.exec(e)),null===t)throw new Error("Date resolve error");if(n=+t[1],i=+t[2]-1,r=+t[3],!t[4])return new Date(Date.UTC(n,i,r));if(o=+t[4],a=+t[5],l=+t[6],t[7]){for(s=t[7].slice(0,3);s.length<3;)s+="0";s=+s}return t[9]&&(u=6e4*(60*+t[10]+ +(t[11]||0)),"-"===t[9]&&(u=-u)),c=new Date(Date.UTC(n,i,r,o,a,l,s)),u&&c.setTime(c.getTime()-u),c},instanceOf:Date,represent:function(e){return e.toISOString()}});var E=new p("tag:yaml.org,2002:merge",{kind:"scalar",resolve:function(e){return"<<"===e||null===e}}),M="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\n\r";var L=new p("tag:yaml.org,2002:binary",{kind:"scalar",resolve:function(e){if(null===e)return!1;var t,n,i=0,r=e.length,o=M;for(n=0;n<r;n++)if(!((t=o.indexOf(e.charAt(n)))>64)){if(t<0)return!1;i+=6}return i%8==0},construct:function(e){var t,n,i=e.replace(/[\r\n=]/g,""),r=i.length,o=M,a=0,l=[];for(t=0;t<r;t++)t%4==0&&t&&(l.push(a>>16&255),l.push(a>>8&255),l.push(255&a)),a=a<<6|o.indexOf(i.charAt(t));return 0===(n=r%4*6)?(l.push(a>>16&255),l.push(a>>8&255),l.push(255&a)):18===n?(l.push(a>>10&255),l.push(a>>2&255)):12===n&&l.push(a>>4&255),new Uint8Array(l)},predicate:function(e){return"[object Uint8Array]"===Object.prototype.toString.call(e)},represent:function(e){var t,n,i="",r=0,o=e.length,a=M;for(t=0;t<o;t++)t%3==0&&t&&(i+=a[r>>18&63],i+=a[r>>12&63],i+=a[r>>6&63],i+=a[63&r]),r=(r<<8)+e[t];return 0===(n=o%3)?(i+=a[r>>18&63],i+=a[r>>12&63],i+=a[r>>6&63],i+=a[63&r]):2===n?(i+=a[r>>10&63],i+=a[r>>4&63],i+=a[r<<2&63],i+=a[64]):1===n&&(i+=a[r>>2&63],i+=a[r<<4&63],i+=a[64],i+=a[64]),i}}),_=Object.prototype.hasOwnProperty,D=Object.prototype.toString;var U=new p("tag:yaml.org,2002:omap",{kind:"sequence",resolve:function(e){if(null===e)return!0;var t,n,i,r,o,a=[],l=e;for(t=0,n=l.length;t<n;t+=1){if(i=l[t],o=!1,"[object Object]"!==D.call(i))return!1;for(r in i)if(_.call(i,r)){if(o)return!1;o=!0}if(!o)return!1;if(-1!==a.indexOf(r))return!1;a.push(r)}return!0},construct:function(e){return null!==e?e:[]}}),q=Object.prototype.toString;var Y=new p("tag:yaml.org,2002:pairs",{kind:"sequence",resolve:function(e){if(null===e)return!0;var t,n,i,r,o,a=e;for(o=new Array(a.length),t=0,n=a.length;t<n;t+=1){if(i=a[t],"[object Object]"!==q.call(i))return!1;if(1!==(r=Object.keys(i)).length)return!1;o[t]=[r[0],i[r[0]]]}return!0},construct:function(e){if(null===e)return[];var t,n,i,r,o,a=e;for(o=new Array(a.length),t=0,n=a.length;t<n;t+=1)i=a[t],r=Object.keys(i),o[t]=[r[0],i[r[0]]];return o}}),R=Object.prototype.hasOwnProperty;var B=new p("tag:yaml.org,2002:set",{kind:"mapping",resolve:function(e){if(null===e)return!0;var t,n=e;for(t in n)if(R.call(n,t)&&null!==n[t])return!1;return!0},construct:function(e){return null!==e?e:{}}}),K=j.extend({implicit:[F,E],explicit:[L,U,Y,B]}),P=Object.prototype.hasOwnProperty,W=/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x84\x86-\x9F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/,H=/[\x85\u2028\u2029]/,$=/[,\[\]\{\}]/,G=/^(?:!|!!|![a-z\-]+!)$/i,V=/^(?:!|[^,\[\]\{\}])(?:%[0-9a-f]{2}|[0-9a-z\-#;\/\?:@&=\+\$,_\.!~\*'\(\)\[\]])*$/i;function Z(e){return Object.prototype.toString.call(e)}function J(e){return 10===e||13===e}function Q(e){return 9===e||32===e}function z(e){return 9===e||32===e||10===e||13===e}function X(e){return 44===e||91===e||93===e||123===e||125===e}function ee(e){var t;return 48<=e&&e<=57?e-48:97<=(t=32|e)&&t<=102?t-97+10:-1}function te(e){return 48===e?"\0":97===e?"":98===e?"\b":116===e||9===e?"\t":110===e?"\n":118===e?"\v":102===e?"\f":114===e?"\r":101===e?"":32===e?" ":34===e?'"':47===e?"/":92===e?"\\":78===e?"":95===e?" ":76===e?"\u2028":80===e?"\u2029":""}function ne(e){return e<=65535?String.fromCharCode(e):String.fromCharCode(55296+(e-65536>>10),56320+(e-65536&1023))}for(var ie=new Array(256),re=new Array(256),oe=0;oe<256;oe++)ie[oe]=te(oe)?1:0,re[oe]=te(oe);function ae(e,t){this.input=e,this.filename=t.filename||null,this.schema=t.schema||K,this.onWarning=t.onWarning||null,this.legacy=t.legacy||!1,this.json=t.json||!1,this.listener=t.listener||null,this.implicitTypes=this.schema.compiledImplicit,this.typeMap=this.schema.compiledTypeMap,this.length=e.length,this.position=0,this.line=0,this.lineStart=0,this.lineIndent=0,this.firstTabInLine=-1,this.documents=[]}function le(e,t){var n={name:e.filename,buffer:e.input.slice(0,-1),position:e.position,line:e.line,column:e.position-e.lineStart};return n.snippet=c(n),new o(t,n)}function ce(e,t){throw le(e,t)}function se(e,t){e.onWarning&&e.onWarning.call(null,le(e,t))}var ue={YAML:function(e,t,n){var i,r,o;null!==e.version&&ce(e,"duplication of %YAML directive"),1!==n.length&&ce(e,"YAML directive accepts exactly one argument"),null===(i=/^([0-9]+)\.([0-9]+)$/.exec(n[0]))&&ce(e,"ill-formed argument of the YAML directive"),r=parseInt(i[1],10),o=parseInt(i[2],10),1!==r&&ce(e,"unacceptable YAML version of the document"),e.version=n[0],e.checkLineBreaks=o<2,1!==o&&2!==o&&se(e,"unsupported YAML version of the document")},TAG:function(e,t,n){var i,r;2!==n.length&&ce(e,"TAG directive accepts exactly two arguments"),i=n[0],r=n[1],G.test(i)||ce(e,"ill-formed tag handle (first argument) of the TAG directive"),P.call(e.tagMap,i)&&ce(e,'there is a previously declared suffix for "'+i+'" tag handle'),V.test(r)||ce(e,"ill-formed tag prefix (second argument) of the TAG directive");try{r=decodeURIComponent(r)}catch(t){ce(e,"tag prefix is malformed: "+r)}e.tagMap[i]=r}};function pe(e,t,n,i){var r,o,a,l;if(t<n){if(l=e.input.slice(t,n),i)for(r=0,o=l.length;r<o;r+=1)9===(a=l.charCodeAt(r))||32<=a&&a<=1114111||ce(e,"expected valid JSON character");else W.test(l)&&ce(e,"the stream contains non-printable characters");e.result+=l}}function fe(e,t,i,r){var o,a,l,c;for(n.isObject(i)||ce(e,"cannot merge mappings; the provided source object is unacceptable"),l=0,c=(o=Object.keys(i)).length;l<c;l+=1)a=o[l],P.call(t,a)||(t[a]=i[a],r[a]=!0)}function de(e,t,n,i,r,o,a,l,c){var s,u;if(Array.isArray(r))for(s=0,u=(r=Array.prototype.slice.call(r)).length;s<u;s+=1)Array.isArray(r[s])&&ce(e,"nested arrays are not supported inside keys"),"object"==typeof r&&"[object Object]"===Z(r[s])&&(r[s]="[object Object]");if("object"==typeof r&&"[object Object]"===Z(r)&&(r="[object Object]"),r=String(r),null===t&&(t={}),"tag:yaml.org,2002:merge"===i)if(Array.isArray(o))for(s=0,u=o.length;s<u;s+=1)fe(e,t,o[s],n);else fe(e,t,o,n);else e.json||P.call(n,r)||!P.call(t,r)||(e.line=a||e.line,e.lineStart=l||e.lineStart,e.position=c||e.position,ce(e,"duplicated mapping key")),"__proto__"===r?Object.defineProperty(t,r,{configurable:!0,enumerable:!0,writable:!0,value:o}):t[r]=o,delete n[r];return t}function he(e){var t;10===(t=e.input.charCodeAt(e.position))?e.position++:13===t?(e.position++,10===e.input.charCodeAt(e.position)&&e.position++):ce(e,"a line break is expected"),e.line+=1,e.lineStart=e.position,e.firstTabInLine=-1}function ge(e,t,n){for(var i=0,r=e.input.charCodeAt(e.position);0!==r;){for(;Q(r);)9===r&&-1===e.firstTabInLine&&(e.firstTabInLine=e.position),r=e.input.charCodeAt(++e.position);if(t&&35===r)do{r=e.input.charCodeAt(++e.position)}while(10!==r&&13!==r&&0!==r);if(!J(r))break;for(he(e),r=e.input.charCodeAt(e.position),i++,e.lineIndent=0;32===r;)e.lineIndent++,r=e.input.charCodeAt(++e.position)}return-1!==n&&0!==i&&e.lineIndent<n&&se(e,"deficient indentation"),i}function me(e){var t,n=e.position;return!(45!==(t=e.input.charCodeAt(n))&&46!==t||t!==e.input.charCodeAt(n+1)||t!==e.input.charCodeAt(n+2)||(n+=3,0!==(t=e.input.charCodeAt(n))&&!z(t)))}function ye(e,t){1===t?e.result+=" ":t>1&&(e.result+=n.repeat("\n",t-1))}function be(e,t){var n,i,r=e.tag,o=e.anchor,a=[],l=!1;if(-1!==e.firstTabInLine)return!1;for(null!==e.anchor&&(e.anchorMap[e.anchor]=a),i=e.input.charCodeAt(e.position);0!==i&&(-1!==e.firstTabInLine&&(e.position=e.firstTabInLine,ce(e,"tab characters must not be used in indentation")),45===i)&&z(e.input.charCodeAt(e.position+1));)if(l=!0,e.position++,ge(e,!0,-1)&&e.lineIndent<=t)a.push(null),i=e.input.charCodeAt(e.position);else if(n=e.line,we(e,t,3,!1,!0),a.push(e.result),ge(e,!0,-1),i=e.input.charCodeAt(e.position),(e.line===n||e.lineIndent>t)&&0!==i)ce(e,"bad indentation of a sequence entry");else if(e.lineIndent<t)break;return!!l&&(e.tag=r,e.anchor=o,e.kind="sequence",e.result=a,!0)}function Ae(e){var t,n,i,r,o=!1,a=!1;if(33!==(r=e.input.charCodeAt(e.position)))return!1;if(null!==e.tag&&ce(e,"duplication of a tag property"),60===(r=e.input.charCodeAt(++e.position))?(o=!0,r=e.input.charCodeAt(++e.position)):33===r?(a=!0,n="!!",r=e.input.charCodeAt(++e.position)):n="!",t=e.position,o){do{r=e.input.charCodeAt(++e.position)}while(0!==r&&62!==r);e.position<e.length?(i=e.input.slice(t,e.position),r=e.input.charCodeAt(++e.position)):ce(e,"unexpected end of the stream within a verbatim tag")}else{for(;0!==r&&!z(r);)33===r&&(a?ce(e,"tag suffix cannot contain exclamation marks"):(n=e.input.slice(t-1,e.position+1),G.test(n)||ce(e,"named tag handle cannot contain such characters"),a=!0,t=e.position+1)),r=e.input.charCodeAt(++e.position);i=e.input.slice(t,e.position),$.test(i)&&ce(e,"tag suffix cannot contain flow indicator characters")}i&&!V.test(i)&&ce(e,"tag name cannot contain such characters: "+i);try{i=decodeURIComponent(i)}catch(t){ce(e,"tag name is malformed: "+i)}return o?e.tag=i:P.call(e.tagMap,n)?e.tag=e.tagMap[n]+i:"!"===n?e.tag="!"+i:"!!"===n?e.tag="tag:yaml.org,2002:"+i:ce(e,'undeclared tag handle "'+n+'"'),!0}function ve(e){var t,n;if(38!==(n=e.input.charCodeAt(e.position)))return!1;for(null!==e.anchor&&ce(e,"duplication of an anchor property"),n=e.input.charCodeAt(++e.position),t=e.position;0!==n&&!z(n)&&!X(n);)n=e.input.charCodeAt(++e.position);return e.position===t&&ce(e,"name of an anchor node must contain at least one character"),e.anchor=e.input.slice(t,e.position),!0}function we(e,t,i,r,o){var a,l,c,s,u,p,f,d,h,g=1,m=!1,y=!1;if(null!==e.listener&&e.listener("open",e),e.tag=null,e.anchor=null,e.kind=null,e.result=null,a=l=c=4===i||3===i,r&&ge(e,!0,-1)&&(m=!0,e.lineIndent>t?g=1:e.lineIndent===t?g=0:e.lineIndent<t&&(g=-1)),1===g)for(;Ae(e)||ve(e);)ge(e,!0,-1)?(m=!0,c=a,e.lineIndent>t?g=1:e.lineIndent===t?g=0:e.lineIndent<t&&(g=-1)):c=!1;if(c&&(c=m||o),1!==g&&4!==i||(d=1===i||2===i?t:t+1,h=e.position-e.lineStart,1===g?c&&(be(e,h)||function(e,t,n){var i,r,o,a,l,c,s,u=e.tag,p=e.anchor,f={},d=Object.create(null),h=null,g=null,m=null,y=!1,b=!1;if(-1!==e.firstTabInLine)return!1;for(null!==e.anchor&&(e.anchorMap[e.anchor]=f),s=e.input.charCodeAt(e.position);0!==s;){if(y||-1===e.firstTabInLine||(e.position=e.firstTabInLine,ce(e,"tab characters must not be used in indentation")),i=e.input.charCodeAt(e.position+1),o=e.line,63!==s&&58!==s||!z(i)){if(a=e.line,l=e.lineStart,c=e.position,!we(e,n,2,!1,!0))break;if(e.line===o){for(s=e.input.charCodeAt(e.position);Q(s);)s=e.input.charCodeAt(++e.position);if(58===s)z(s=e.input.charCodeAt(++e.position))||ce(e,"a whitespace character is expected after the key-value separator within a block mapping"),y&&(de(e,f,d,h,g,null,a,l,c),h=g=m=null),b=!0,y=!1,r=!1,h=e.tag,g=e.result;else{if(!b)return e.tag=u,e.anchor=p,!0;ce(e,"can not read an implicit mapping pair; a colon is missed")}}else{if(!b)return e.tag=u,e.anchor=p,!0;ce(e,"can not read a block mapping entry; a multiline key may not be an implicit key")}}else 63===s?(y&&(de(e,f,d,h,g,null,a,l,c),h=g=m=null),b=!0,y=!0,r=!0):y?(y=!1,r=!0):ce(e,"incomplete explicit mapping pair; a key node is missed; or followed by a non-tabulated empty line"),e.position+=1,s=i;if((e.line===o||e.lineIndent>t)&&(y&&(a=e.line,l=e.lineStart,c=e.position),we(e,t,4,!0,r)&&(y?g=e.result:m=e.result),y||(de(e,f,d,h,g,m,a,l,c),h=g=m=null),ge(e,!0,-1),s=e.input.charCodeAt(e.position)),(e.line===o||e.lineIndent>t)&&0!==s)ce(e,"bad indentation of a mapping entry");else if(e.lineIndent<t)break}return y&&de(e,f,d,h,g,null,a,l,c),b&&(e.tag=u,e.anchor=p,e.kind="mapping",e.result=f),b}(e,h,d))||function(e,t){var n,i,r,o,a,l,c,s,u,p,f,d,h=!0,g=e.tag,m=e.anchor,y=Object.create(null);if(91===(d=e.input.charCodeAt(e.position)))a=93,s=!1,o=[];else{if(123!==d)return!1;a=125,s=!0,o={}}for(null!==e.anchor&&(e.anchorMap[e.anchor]=o),d=e.input.charCodeAt(++e.position);0!==d;){if(ge(e,!0,t),(d=e.input.charCodeAt(e.position))===a)return e.position++,e.tag=g,e.anchor=m,e.kind=s?"mapping":"sequence",e.result=o,!0;h?44===d&&ce(e,"expected the node content, but found ','"):ce(e,"missed comma between flow collection entries"),f=null,l=c=!1,63===d&&z(e.input.charCodeAt(e.position+1))&&(l=c=!0,e.position++,ge(e,!0,t)),n=e.line,i=e.lineStart,r=e.position,we(e,t,1,!1,!0),p=e.tag,u=e.result,ge(e,!0,t),d=e.input.charCodeAt(e.position),!c&&e.line!==n||58!==d||(l=!0,d=e.input.charCodeAt(++e.position),ge(e,!0,t),we(e,t,1,!1,!0),f=e.result),s?de(e,o,y,p,u,f,n,i,r):l?o.push(de(e,null,y,p,u,f,n,i,r)):o.push(u),ge(e,!0,t),44===(d=e.input.charCodeAt(e.position))?(h=!0,d=e.input.charCodeAt(++e.position)):h=!1}ce(e,"unexpected end of the stream within a flow collection")}(e,d)?y=!0:(l&&function(e,t){var i,r,o,a,l,c=1,s=!1,u=!1,p=t,f=0,d=!1;if(124===(a=e.input.charCodeAt(e.position)))r=!1;else{if(62!==a)return!1;r=!0}for(e.kind="scalar",e.result="";0!==a;)if(43===(a=e.input.charCodeAt(++e.position))||45===a)1===c?c=43===a?3:2:ce(e,"repeat of a chomping mode identifier");else{if(!((o=48<=(l=a)&&l<=57?l-48:-1)>=0))break;0===o?ce(e,"bad explicit indentation width of a block scalar; it cannot be less than one"):u?ce(e,"repeat of an indentation width identifier"):(p=t+o-1,u=!0)}if(Q(a)){do{a=e.input.charCodeAt(++e.position)}while(Q(a));if(35===a)do{a=e.input.charCodeAt(++e.position)}while(!J(a)&&0!==a)}for(;0!==a;){for(he(e),e.lineIndent=0,a=e.input.charCodeAt(e.position);(!u||e.lineIndent<p)&&32===a;)e.lineIndent++,a=e.input.charCodeAt(++e.position);if(!u&&e.lineIndent>p&&(p=e.lineIndent),J(a))f++;else{if(e.lineIndent<p){3===c?e.result+=n.repeat("\n",s?1+f:f):1===c&&s&&(e.result+="\n");break}for(r?Q(a)?(d=!0,e.result+=n.repeat("\n",s?1+f:f)):d?(d=!1,e.result+=n.repeat("\n",f+1)):0===f?s&&(e.result+=" "):e.result+=n.repeat("\n",f):e.result+=n.repeat("\n",s?1+f:f),s=!0,u=!0,f=0,i=e.position;!J(a)&&0!==a;)a=e.input.charCodeAt(++e.position);pe(e,i,e.position,!1)}}return!0}(e,d)||function(e,t){var n,i,r;if(39!==(n=e.input.charCodeAt(e.position)))return!1;for(e.kind="scalar",e.result="",e.position++,i=r=e.position;0!==(n=e.input.charCodeAt(e.position));)if(39===n){if(pe(e,i,e.position,!0),39!==(n=e.input.charCodeAt(++e.position)))return!0;i=e.position,e.position++,r=e.position}else J(n)?(pe(e,i,r,!0),ye(e,ge(e,!1,t)),i=r=e.position):e.position===e.lineStart&&me(e)?ce(e,"unexpected end of the document within a single quoted scalar"):(e.position++,r=e.position);ce(e,"unexpected end of the stream within a single quoted scalar")}(e,d)||function(e,t){var n,i,r,o,a,l,c;if(34!==(l=e.input.charCodeAt(e.position)))return!1;for(e.kind="scalar",e.result="",e.position++,n=i=e.position;0!==(l=e.input.charCodeAt(e.position));){if(34===l)return pe(e,n,e.position,!0),e.position++,!0;if(92===l){if(pe(e,n,e.position,!0),J(l=e.input.charCodeAt(++e.position)))ge(e,!1,t);else if(l<256&&ie[l])e.result+=re[l],e.position++;else if((a=120===(c=l)?2:117===c?4:85===c?8:0)>0){for(r=a,o=0;r>0;r--)(a=ee(l=e.input.charCodeAt(++e.position)))>=0?o=(o<<4)+a:ce(e,"expected hexadecimal character");e.result+=ne(o),e.position++}else ce(e,"unknown escape sequence");n=i=e.position}else J(l)?(pe(e,n,i,!0),ye(e,ge(e,!1,t)),n=i=e.position):e.position===e.lineStart&&me(e)?ce(e,"unexpected end of the document within a double quoted scalar"):(e.position++,i=e.position)}ce(e,"unexpected end of the stream within a double quoted scalar")}(e,d)?y=!0:!function(e){var t,n,i;if(42!==(i=e.input.charCodeAt(e.position)))return!1;for(i=e.input.charCodeAt(++e.position),t=e.position;0!==i&&!z(i)&&!X(i);)i=e.input.charCodeAt(++e.position);return e.position===t&&ce(e,"name of an alias node must contain at least one character"),n=e.input.slice(t,e.position),P.call(e.anchorMap,n)||ce(e,'unidentified alias "'+n+'"'),e.result=e.anchorMap[n],ge(e,!0,-1),!0}(e)?function(e,t,n){var i,r,o,a,l,c,s,u,p=e.kind,f=e.result;if(z(u=e.input.charCodeAt(e.position))||X(u)||35===u||38===u||42===u||33===u||124===u||62===u||39===u||34===u||37===u||64===u||96===u)return!1;if((63===u||45===u)&&(z(i=e.input.charCodeAt(e.position+1))||n&&X(i)))return!1;for(e.kind="scalar",e.result="",r=o=e.position,a=!1;0!==u;){if(58===u){if(z(i=e.input.charCodeAt(e.position+1))||n&&X(i))break}else if(35===u){if(z(e.input.charCodeAt(e.position-1)))break}else{if(e.position===e.lineStart&&me(e)||n&&X(u))break;if(J(u)){if(l=e.line,c=e.lineStart,s=e.lineIndent,ge(e,!1,-1),e.lineIndent>=t){a=!0,u=e.input.charCodeAt(e.position);continue}e.position=o,e.line=l,e.lineStart=c,e.lineIndent=s;break}}a&&(pe(e,r,o,!1),ye(e,e.line-l),r=o=e.position,a=!1),Q(u)||(o=e.position+1),u=e.input.charCodeAt(++e.position)}return pe(e,r,o,!1),!!e.result||(e.kind=p,e.result=f,!1)}(e,d,1===i)&&(y=!0,null===e.tag&&(e.tag="?")):(y=!0,null===e.tag&&null===e.anchor||ce(e,"alias node should not have any properties")),null!==e.anchor&&(e.anchorMap[e.anchor]=e.result)):0===g&&(y=c&&be(e,h))),null===e.tag)null!==e.anchor&&(e.anchorMap[e.anchor]=e.result);else if("?"===e.tag){for(null!==e.result&&"scalar"!==e.kind&&ce(e,'unacceptable node kind for !<?> tag; it should be "scalar", not "'+e.kind+'"'),s=0,u=e.implicitTypes.length;s<u;s+=1)if((f=e.implicitTypes[s]).resolve(e.result)){e.result=f.construct(e.result),e.tag=f.tag,null!==e.anchor&&(e.anchorMap[e.anchor]=e.result);break}}else if("!"!==e.tag){if(P.call(e.typeMap[e.kind||"fallback"],e.tag))f=e.typeMap[e.kind||"fallback"][e.tag];else for(f=null,s=0,u=(p=e.typeMap.multi[e.kind||"fallback"]).length;s<u;s+=1)if(e.tag.slice(0,p[s].tag.length)===p[s].tag){f=p[s];break}f||ce(e,"unknown tag !<"+e.tag+">"),null!==e.result&&f.kind!==e.kind&&ce(e,"unacceptable node kind for !<"+e.tag+'> tag; it should be "'+f.kind+'", not "'+e.kind+'"'),f.resolve(e.result,e.tag)?(e.result=f.construct(e.result,e.tag),null!==e.anchor&&(e.anchorMap[e.anchor]=e.result)):ce(e,"cannot resolve a node with !<"+e.tag+"> explicit tag")}return null!==e.listener&&e.listener("close",e),null!==e.tag||null!==e.anchor||y}function ke(e){var t,n,i,r,o=e.position,a=!1;for(e.version=null,e.checkLineBreaks=e.legacy,e.tagMap=Object.create(null),e.anchorMap=Object.create(null);0!==(r=e.input.charCodeAt(e.position))&&(ge(e,!0,-1),r=e.input.charCodeAt(e.position),!(e.lineIndent>0||37!==r));){for(a=!0,r=e.input.charCodeAt(++e.position),t=e.position;0!==r&&!z(r);)r=e.input.charCodeAt(++e.position);for(i=[],(n=e.input.slice(t,e.position)).length<1&&ce(e,"directive name must not be less than one character in length");0!==r;){for(;Q(r);)r=e.input.charCodeAt(++e.position);if(35===r){do{r=e.input.charCodeAt(++e.position)}while(0!==r&&!J(r));break}if(J(r))break;for(t=e.position;0!==r&&!z(r);)r=e.input.charCodeAt(++e.position);i.push(e.input.slice(t,e.position))}0!==r&&he(e),P.call(ue,n)?ue[n](e,n,i):se(e,'unknown document directive "'+n+'"')}ge(e,!0,-1),0===e.lineIndent&&45===e.input.charCodeAt(e.position)&&45===e.input.charCodeAt(e.position+1)&&45===e.input.charCodeAt(e.position+2)?(e.position+=3,ge(e,!0,-1)):a&&ce(e,"directives end mark is expected"),we(e,e.lineIndent-1,4,!1,!0),ge(e,!0,-1),e.checkLineBreaks&&H.test(e.input.slice(o,e.position))&&se(e,"non-ASCII line breaks are interpreted as content"),e.documents.push(e.result),e.position===e.lineStart&&me(e)?46===e.input.charCodeAt(e.position)&&(e.position+=3,ge(e,!0,-1)):e.position<e.length-1&&ce(e,"end of the stream or a document separator is expected")}function Ce(e,t){t=t||{},0!==(e=String(e)).length&&(10!==e.charCodeAt(e.length-1)&&13!==e.charCodeAt(e.length-1)&&(e+="\n"),65279===e.charCodeAt(0)&&(e=e.slice(1)));var n=new ae(e,t),i=e.indexOf("\0");for(-1!==i&&(n.position=i,ce(n,"null byte is not allowed in input")),n.input+="\0";32===n.input.charCodeAt(n.position);)n.lineIndent+=1,n.position+=1;for(;n.position<n.length-1;)ke(n);return n.documents}var xe={loadAll:function(e,t,n){null!==t&&"object"==typeof t&&void 0===n&&(n=t,t=null);var i=Ce(e,n);if("function"!=typeof t)return i;for(var r=0,o=i.length;r<o;r+=1)t(i[r])},load:function(e,t){var n=Ce(e,t);if(0!==n.length){if(1===n.length)return n[0];throw new o("expected a single document in the stream, but found more")}}},Ie=Object.prototype.toString,Se=Object.prototype.hasOwnProperty,Oe=65279,je={0:"\\0",7:"\\a",8:"\\b",9:"\\t",10:"\\n",11:"\\v",12:"\\f",13:"\\r",27:"\\e",34:'\\"',92:"\\\\",133:"\\N",160:"\\_",8232:"\\L",8233:"\\P"},Te=["y","Y","yes","Yes","YES","on","On","ON","n","N","no","No","NO","off","Off","OFF"],Ne=/^[-+]?[0-9_]+(?::[0-9_]+)+(?:\.[0-9_]*)?$/;function Fe(e){var t,i,r;if(t=e.toString(16).toUpperCase(),e<=255)i="x",r=2;else if(e<=65535)i="u",r=4;else{if(!(e<=4294967295))throw new o("code point within a string may not be greater than 0xFFFFFFFF");i="U",r=8}return"\\"+i+n.repeat("0",r-t.length)+t}function Ee(e){this.schema=e.schema||K,this.indent=Math.max(1,e.indent||2),this.noArrayIndent=e.noArrayIndent||!1,this.skipInvalid=e.skipInvalid||!1,this.flowLevel=n.isNothing(e.flowLevel)?-1:e.flowLevel,this.styleMap=function(e,t){var n,i,r,o,a,l,c;if(null===t)return{};for(n={},r=0,o=(i=Object.keys(t)).length;r<o;r+=1)a=i[r],l=String(t[a]),"!!"===a.slice(0,2)&&(a="tag:yaml.org,2002:"+a.slice(2)),(c=e.compiledTypeMap.fallback[a])&&Se.call(c.styleAliases,l)&&(l=c.styleAliases[l]),n[a]=l;return n}(this.schema,e.styles||null),this.sortKeys=e.sortKeys||!1,this.lineWidth=e.lineWidth||80,this.noRefs=e.noRefs||!1,this.noCompatMode=e.noCompatMode||!1,this.condenseFlow=e.condenseFlow||!1,this.quotingType='"'===e.quotingType?2:1,this.forceQuotes=e.forceQuotes||!1,this.replacer="function"==typeof e.replacer?e.replacer:null,this.implicitTypes=this.schema.compiledImplicit,this.explicitTypes=this.schema.compiledExplicit,this.tag=null,this.result="",this.duplicates=[],this.usedDuplicates=null}function Me(e,t){for(var i,r=n.repeat(" ",t),o=0,a=-1,l="",c=e.length;o<c;)-1===(a=e.indexOf("\n",o))?(i=e.slice(o),o=c):(i=e.slice(o,a+1),o=a+1),i.length&&"\n"!==i&&(l+=r),l+=i;return l}function Le(e,t){return"\n"+n.repeat(" ",e.indent*t)}function _e(e){return 32===e||9===e}function De(e){return 32<=e&&e<=126||161<=e&&e<=55295&&8232!==e&&8233!==e||57344<=e&&e<=65533&&e!==Oe||65536<=e&&e<=1114111}function Ue(e){return De(e)&&e!==Oe&&13!==e&&10!==e}function qe(e,t,n){var i=Ue(e),r=i&&!_e(e);return(n?i:i&&44!==e&&91!==e&&93!==e&&123!==e&&125!==e)&&35!==e&&!(58===t&&!r)||Ue(t)&&!_e(t)&&35===e||58===t&&r}function Ye(e,t){var n,i=e.charCodeAt(t);return i>=55296&&i<=56319&&t+1<e.length&&(n=e.charCodeAt(t+1))>=56320&&n<=57343?1024*(i-55296)+n-56320+65536:i}function Re(e){return/^\n* /.test(e)}function Be(e,t,n,i,r,o,a,l){var c,s,u=0,p=null,f=!1,d=!1,h=-1!==i,g=-1,m=De(s=Ye(e,0))&&s!==Oe&&!_e(s)&&45!==s&&63!==s&&58!==s&&44!==s&&91!==s&&93!==s&&123!==s&&125!==s&&35!==s&&38!==s&&42!==s&&33!==s&&124!==s&&61!==s&&62!==s&&39!==s&&34!==s&&37!==s&&64!==s&&96!==s&&function(e){return!_e(e)&&58!==e}(Ye(e,e.length-1));if(t||a)for(c=0;c<e.length;u>=65536?c+=2:c++){if(!De(u=Ye(e,c)))return 5;m=m&&qe(u,p,l),p=u}else{for(c=0;c<e.length;u>=65536?c+=2:c++){if(10===(u=Ye(e,c)))f=!0,h&&(d=d||c-g-1>i&&" "!==e[g+1],g=c);else if(!De(u))return 5;m=m&&qe(u,p,l),p=u}d=d||h&&c-g-1>i&&" "!==e[g+1]}return f||d?n>9&&Re(e)?5:a?2===o?5:2:d?4:3:!m||a||r(e)?2===o?5:2:1}function Ke(e,t,n,i,r){e.dump=function(){if(0===t.length)return 2===e.quotingType?'""':"''";if(!e.noCompatMode&&(-1!==Te.indexOf(t)||Ne.test(t)))return 2===e.quotingType?'"'+t+'"':"'"+t+"'";var a=e.indent*Math.max(1,n),l=-1===e.lineWidth?-1:Math.max(Math.min(e.lineWidth,40),e.lineWidth-a),c=i||e.flowLevel>-1&&n>=e.flowLevel;switch(Be(t,c,e.indent,l,(function(t){return function(e,t){var n,i;for(n=0,i=e.implicitTypes.length;n<i;n+=1)if(e.implicitTypes[n].resolve(t))return!0;return!1}(e,t)}),e.quotingType,e.forceQuotes&&!i,r)){case 1:return t;case 2:return"'"+t.replace(/'/g,"''")+"'";case 3:return"|"+Pe(t,e.indent)+We(Me(t,a));case 4:return">"+Pe(t,e.indent)+We(Me(function(e,t){var n,i,r=/(\n+)([^\n]*)/g,o=(l=e.indexOf("\n"),l=-1!==l?l:e.length,r.lastIndex=l,He(e.slice(0,l),t)),a="\n"===e[0]||" "===e[0];var l;for(;i=r.exec(e);){var c=i[1],s=i[2];n=" "===s[0],o+=c+(a||n||""===s?"":"\n")+He(s,t),a=n}return o}(t,l),a));case 5:return'"'+function(e){for(var t,n="",i=0,r=0;r<e.length;i>=65536?r+=2:r++)i=Ye(e,r),!(t=je[i])&&De(i)?(n+=e[r],i>=65536&&(n+=e[r+1])):n+=t||Fe(i);return n}(t)+'"';default:throw new o("impossible error: invalid scalar style")}}()}function Pe(e,t){var n=Re(e)?String(t):"",i="\n"===e[e.length-1];return n+(i&&("\n"===e[e.length-2]||"\n"===e)?"+":i?"":"-")+"\n"}function We(e){return"\n"===e[e.length-1]?e.slice(0,-1):e}function He(e,t){if(""===e||" "===e[0])return e;for(var n,i,r=/ [^ ]/g,o=0,a=0,l=0,c="";n=r.exec(e);)(l=n.index)-o>t&&(i=a>o?a:l,c+="\n"+e.slice(o,i),o=i+1),a=l;return c+="\n",e.length-o>t&&a>o?c+=e.slice(o,a)+"\n"+e.slice(a+1):c+=e.slice(o),c.slice(1)}function $e(e,t,n,i){var r,o,a,l="",c=e.tag;for(r=0,o=n.length;r<o;r+=1)a=n[r],e.replacer&&(a=e.replacer.call(n,String(r),a)),(Ve(e,t+1,a,!0,!0,!1,!0)||void 0===a&&Ve(e,t+1,null,!0,!0,!1,!0))&&(i&&""===l||(l+=Le(e,t)),e.dump&&10===e.dump.charCodeAt(0)?l+="-":l+="- ",l+=e.dump);e.tag=c,e.dump=l||"[]"}function Ge(e,t,n){var i,r,a,l,c,s;for(a=0,l=(r=n?e.explicitTypes:e.implicitTypes).length;a<l;a+=1)if(((c=r[a]).instanceOf||c.predicate)&&(!c.instanceOf||"object"==typeof t&&t instanceof c.instanceOf)&&(!c.predicate||c.predicate(t))){if(n?c.multi&&c.representName?e.tag=c.representName(t):e.tag=c.tag:e.tag="?",c.represent){if(s=e.styleMap[c.tag]||c.defaultStyle,"[object Function]"===Ie.call(c.represent))i=c.represent(t,s);else{if(!Se.call(c.represent,s))throw new o("!<"+c.tag+'> tag resolver accepts not "'+s+'" style');i=c.represent[s](t,s)}e.dump=i}return!0}return!1}function Ve(e,t,n,i,r,a,l){e.tag=null,e.dump=n,Ge(e,n,!1)||Ge(e,n,!0);var c,s=Ie.call(e.dump),u=i;i&&(i=e.flowLevel<0||e.flowLevel>t);var p,f,d="[object Object]"===s||"[object Array]"===s;if(d&&(f=-1!==(p=e.duplicates.indexOf(n))),(null!==e.tag&&"?"!==e.tag||f||2!==e.indent&&t>0)&&(r=!1),f&&e.usedDuplicates[p])e.dump="*ref_"+p;else{if(d&&f&&!e.usedDuplicates[p]&&(e.usedDuplicates[p]=!0),"[object Object]"===s)i&&0!==Object.keys(e.dump).length?(!function(e,t,n,i){var r,a,l,c,s,u,p="",f=e.tag,d=Object.keys(n);if(!0===e.sortKeys)d.sort();else if("function"==typeof e.sortKeys)d.sort(e.sortKeys);else if(e.sortKeys)throw new o("sortKeys must be a boolean or a function");for(r=0,a=d.length;r<a;r+=1)u="",i&&""===p||(u+=Le(e,t)),c=n[l=d[r]],e.replacer&&(c=e.replacer.call(n,l,c)),Ve(e,t+1,l,!0,!0,!0)&&((s=null!==e.tag&&"?"!==e.tag||e.dump&&e.dump.length>1024)&&(e.dump&&10===e.dump.charCodeAt(0)?u+="?":u+="? "),u+=e.dump,s&&(u+=Le(e,t)),Ve(e,t+1,c,!0,s)&&(e.dump&&10===e.dump.charCodeAt(0)?u+=":":u+=": ",p+=u+=e.dump));e.tag=f,e.dump=p||"{}"}(e,t,e.dump,r),f&&(e.dump="&ref_"+p+e.dump)):(!function(e,t,n){var i,r,o,a,l,c="",s=e.tag,u=Object.keys(n);for(i=0,r=u.length;i<r;i+=1)l="",""!==c&&(l+=", "),e.condenseFlow&&(l+='"'),a=n[o=u[i]],e.replacer&&(a=e.replacer.call(n,o,a)),Ve(e,t,o,!1,!1)&&(e.dump.length>1024&&(l+="? "),l+=e.dump+(e.condenseFlow?'"':"")+":"+(e.condenseFlow?"":" "),Ve(e,t,a,!1,!1)&&(c+=l+=e.dump));e.tag=s,e.dump="{"+c+"}"}(e,t,e.dump),f&&(e.dump="&ref_"+p+" "+e.dump));else if("[object Array]"===s)i&&0!==e.dump.length?(e.noArrayIndent&&!l&&t>0?$e(e,t-1,e.dump,r):$e(e,t,e.dump,r),f&&(e.dump="&ref_"+p+e.dump)):(!function(e,t,n){var i,r,o,a="",l=e.tag;for(i=0,r=n.length;i<r;i+=1)o=n[i],e.replacer&&(o=e.replacer.call(n,String(i),o)),(Ve(e,t,o,!1,!1)||void 0===o&&Ve(e,t,null,!1,!1))&&(""!==a&&(a+=","+(e.condenseFlow?"":" ")),a+=e.dump);e.tag=l,e.dump="["+a+"]"}(e,t,e.dump),f&&(e.dump="&ref_"+p+" "+e.dump));else{if("[object String]"!==s){if("[object Undefined]"===s)return!1;if(e.skipInvalid)return!1;throw new o("unacceptable kind of an object to dump "+s)}"?"!==e.tag&&Ke(e,e.dump,t,a,u)}null!==e.tag&&"?"!==e.tag&&(c=encodeURI("!"===e.tag[0]?e.tag.slice(1):e.tag).replace(/!/g,"%21"),c="!"===e.tag[0]?"!"+c:"tag:yaml.org,2002:"===c.slice(0,18)?"!!"+c.slice(18):"!<"+c+">",e.dump=c+" "+e.dump)}return!0}function Ze(e,t){var n,i,r=[],o=[];for(Je(e,r,o),n=0,i=o.length;n<i;n+=1)t.duplicates.push(r[o[n]]);t.usedDuplicates=new Array(i)}function Je(e,t,n){var i,r,o;if(null!==e&&"object"==typeof e)if(-1!==(r=t.indexOf(e)))-1===n.indexOf(r)&&n.push(r);else if(t.push(e),Array.isArray(e))for(r=0,o=e.length;r<o;r+=1)Je(e[r],t,n);else for(r=0,o=(i=Object.keys(e)).length;r<o;r+=1)Je(e[i[r]],t,n)}function Qe(e,t){return function(){throw new Error("Function yaml."+e+" is removed in js-yaml 4. Use yaml."+t+" instead, which is now safe by default.")}}var ze=p,Xe=h,et=b,tt=O,nt=j,it=K,rt=xe.load,ot=xe.loadAll,at={dump:function(e,t){var n=new Ee(t=t||{});n.noRefs||Ze(e,n);var i=e;return n.replacer&&(i=n.replacer.call({"":i},"",i)),Ve(n,0,i,!0,!0)?n.dump+"\n":""}}.dump,lt=o,ct={binary:L,float:S,map:y,null:A,pairs:Y,set:B,timestamp:F,bool:v,int:C,merge:E,omap:U,seq:m,str:g},st=Qe("safeLoad","load"),ut=Qe("safeLoadAll","loadAll"),pt=Qe("safeDump","dump"),ft={Type:ze,Schema:Xe,FAILSAFE_SCHEMA:et,JSON_SCHEMA:tt,CORE_SCHEMA:nt,DEFAULT_SCHEMA:it,load:rt,loadAll:ot,dump:at,YAMLException:lt,types:ct,safeLoad:st,safeLoadAll:ut,safeDump:pt};e.CORE_SCHEMA=nt,e.DEFAULT_SCHEMA=it,e.FAILSAFE_SCHEMA=et,e.JSON_SCHEMA=tt,e.Schema=Xe,e.Type=ze,e.YAMLException=lt,e.default=ft,e.dump=at,e.load=rt,e.loadAll=ot,e.safeDump=pt,e.safeLoad=st,e.safeLoadAll=ut,e.types=ct,Object.defineProperty(e,"__esModule",{value:!0})}));
+</script>
+<script>
+(function () {
+'use strict';
+var SIGMA_DATA = {
+  samples: {
+    certutil: {
+      label: 'Certutil URL cache download',
+      yaml: String.raw`title: Certutil URL Cache Download
+id: 5c6f1a64-8b0e-4d1c-9a57-3e2d7f40b1aa
+status: experimental
+description: Certutil fetching a remote file through the URL cache
+tags:
+  - attack.command_and_control
+  - attack.t1105
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    - Image|endswith: '\certutil.exe'
+    - OriginalFileName: 'CertUtil.exe'
+  selection_cli:
+    CommandLine|windash|contains|all:
+      - 'urlcache'
+      - '-f'
+  filter_local:
+    CommandLine|contains: 'http://localhost'
+  condition: all of selection_* and not filter_local
+falsepositives:
+  - Software deployment tooling
+level: high
+`
+    },
+    powershell: {
+      label: 'Encoded Invoke-Expression',
+      yaml: String.raw`title: Base64 Encoded Invoke-Expression In PowerShell
+id: 0d93e7b2-41c5-4f0a-8e36-9b7a2c1d5e84
+status: test
+description: PowerShell command line carrying a UTF-16 base64 blob that decodes to Invoke-Expression or IEX
+tags:
+  - attack.execution
+  - attack.t1059.001
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    Image|endswith:
+      - '\powershell.exe'
+      - '\pwsh.exe'
+  selection_blob:
+    CommandLine|wide|base64offset|contains:
+      - 'Invoke-Expression'
+      - 'IEX '
+  condition: selection_img and selection_blob
+level: medium
+`
+    },
+    network: {
+      label: 'Office app to public address',
+      yaml: String.raw`title: Office Application Connects To Public Address
+id: a41b9c70-2e58-4d13-b6f2-7c0e85d93a16
+status: experimental
+description: Word or Excel opening an outbound connection to a non private range on a high port
+tags:
+  - attack.command_and_control
+  - attack.t1071.001
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    Initiated: 'true'
+    Image|endswith:
+      - '\winword.exe'
+      - '\excel.exe'
+  internal:
+    DestinationIp|cidr:
+      - '10.0.0.0/8'
+      - '172.16.0.0/12'
+      - '192.168.0.0/16'
+  high_port:
+    DestinationPort|gte: 1024
+  condition: selection and not internal and high_port
+level: medium
+`
+    },
+    auth: {
+      label: 'Keywords and regex',
+      yaml: String.raw`title: Failed Logons Against Jump And VPN Hosts
+id: e7d20f58-93a1-4b6c-8d04-1f5a6c3b9e72
+status: experimental
+description: Failed authentication messages from hosts that match the jump or VPN naming pattern
+tags:
+  - attack.credential_access
+  - attack.t1110
+logsource:
+  product: linux
+  service: auth
+detection:
+  keywords:
+    - 'Failed password for invalid user'
+    - 'authentication failure'
+  host_pattern:
+    Hostname|re: '^(vpn|jump)-[0-9]{2,3}\.corp\.local$'
+  condition: keywords and host_pattern
+level: low
+`
+    }
+  },
+  pipes: {
+    falcon: {
+      label: 'CrowdStrike Falcon (LogScale)',
+      yaml: `name: Falcon LogScale
+# Starting point. Check field names against your own sensor data.
+# Image has no equivalent on NetworkConnectIP4, join on ContextProcessId and TargetProcessId for that.
+transformations:
+  - id: process_event
+    type: add_condition
+    conditions:
+      '#event_simpleName': ProcessRollup2
+    rule_conditions:
+      - {type: logsource, category: process_creation}
+  - id: process_fields
+    type: field_name_mapping
+    mapping:
+      Image: ImageFileName
+      ParentImage: ParentBaseFileName
+      User: UserName
+      Computer: ComputerName
+    rule_conditions:
+      - {type: logsource, category: process_creation}
+  - id: network_event
+    type: add_condition
+    conditions:
+      '#event_simpleName': NetworkConnectIP4
+    rule_conditions:
+      - {type: logsource, category: network_connection}
+  - id: network_fields
+    type: field_name_mapping
+    mapping:
+      DestinationIp: RemoteAddressIP4
+      DestinationPort: RemotePort
+      SourceIp: LocalAddressIP4
+      SourcePort: LocalPort
+    rule_conditions:
+      - {type: logsource, category: network_connection}
+`
+    },
+    splunk: {
+      label: 'Splunk with Sysmon',
+      yaml: `name: Splunk Sysmon
+# Starting point. Adjust the source value to match your inputs.
+transformations:
+  - id: sysmon_process
+    type: add_condition
+    conditions:
+      source: 'XmlWinEventLog:Microsoft-Windows-Sysmon/Operational'
+      EventCode: 1
+    rule_conditions:
+      - {type: logsource, category: process_creation}
+  - id: sysmon_network
+    type: add_condition
+    conditions:
+      source: 'XmlWinEventLog:Microsoft-Windows-Sysmon/Operational'
+      EventCode: 3
+    rule_conditions:
+      - {type: logsource, category: network_connection}
+  - id: host_field
+    type: field_name_mapping
+    mapping:
+      Computer: host
+`
+    },
+    ecs: {
+      label: 'Elastic ECS',
+      yaml: `name: Elastic ECS
+# Starting point for ECS style field names.
+transformations:
+  - id: process_fields
+    type: field_name_mapping
+    mapping:
+      Image: process.executable
+      CommandLine: process.command_line
+      ParentImage: process.parent.executable
+      ParentCommandLine: process.parent.command_line
+      OriginalFileName: process.pe.original_file_name
+      User: user.name
+      Computer: host.name
+    rule_conditions:
+      - {type: logsource, category: process_creation}
+  - id: network_fields
+    type: field_name_mapping
+    mapping:
+      Image: process.executable
+      DestinationIp: destination.ip
+      DestinationPort: destination.port
+      SourceIp: source.ip
+      SourcePort: source.port
+    rule_conditions:
+      - {type: logsource, category: network_connection}
+`
+    },
+    defender: {
+      label: 'Defender for Endpoint',
+      yaml: `name: Defender for Endpoint
+# Starting point. set_state picks the table used by the KQL output.
+transformations:
+  - id: process_table
+    type: set_state
+    key: table
+    val: DeviceProcessEvents
+    rule_conditions:
+      - {type: logsource, category: process_creation}
+  - id: process_fields
+    type: field_name_mapping
+    mapping:
+      Image: FolderPath
+      CommandLine: ProcessCommandLine
+      OriginalFileName: ProcessVersionInfoOriginalFileName
+      ParentImage: InitiatingProcessFolderPath
+      ParentCommandLine: InitiatingProcessCommandLine
+      User: AccountName
+    rule_conditions:
+      - {type: logsource, category: process_creation}
+  - id: network_table
+    type: set_state
+    key: table
+    val: DeviceNetworkEvents
+    rule_conditions:
+      - {type: logsource, category: network_connection}
+  - id: network_fields
+    type: field_name_mapping
+    mapping:
+      Image: InitiatingProcessFolderPath
+      DestinationIp: RemoteIP
+      DestinationPort: RemotePort
+      SourceIp: LocalIP
+      SourcePort: LocalPort
+    rule_conditions:
+      - {type: logsource, category: network_connection}
+`
+    }
+  }
+};
+if (typeof module !== 'undefined') module.exports = SIGMA_DATA;
+
+const Sigma = (function () {
+  'use strict';
+
+  class SigmaError extends Error {}
+
+  // ---------- Sigma string model: array of literal strings and wildcard tokens ----------
+  const W = c => ({ w: c });
+  const isW = t => typeof t !== 'string';
+  const isPlain = a => a.every(t => !isW(t));
+  const startsW = a => a.length > 0 && isW(a[0]) && a[0].w === '*';
+  const endsW = a => a.length > 0 && isW(a[a.length - 1]) && a[a.length - 1].w === '*';
+  const strText = a => a.map(t => (isW(t) ? t.w : t)).join('');
+  const onlyStar = a => a.length === 1 && isW(a[0]) && a[0].w === '*';
+
+  function norm(a) {
+    const r = [];
+    for (const t of a) {
+      const last = r[r.length - 1];
+      if (typeof t === 'string') {
+        if (!t) continue;
+        if (typeof last === 'string') r[r.length - 1] = last + t; else r.push(t);
+      } else {
+        if (last && isW(last) && last.w === '*' && t.w === '*') continue;
+        r.push(t);
+      }
+    }
+    return r;
+  }
+
+  function parseStr(s) {
+    const out = [];
+    let buf = '';
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (c === '\\' && i + 1 < s.length && '*?\\'.includes(s[i + 1])) { buf += s[i + 1]; i++; }
+      else if (c === '*' || c === '?') { out.push(buf); buf = ''; out.push(W(c)); }
+      else buf += c;
+    }
+    out.push(buf);
+    return norm(out);
+  }
+
+  function plainText(a) {
+    if (!isPlain(a)) throw new SigmaError('Wildcards cannot be combined with encoding modifiers such as base64 or wide');
+    return a.join('');
+  }
+
+  // ---------- value modifiers ----------
+  const enc = new TextEncoder();
+  const bytesOf = x => (x instanceof Uint8Array ? x : enc.encode(plainText(x)));
+  const asTokens = x => (x instanceof Uint8Array ? [String.fromCharCode(...x)] : x);
+  function b64(bytes) {
+    let s = '';
+    for (const b of bytes) s += String.fromCharCode(b);
+    return btoa(s);
+  }
+  function utf16(str, endian, bom) {
+    const out = new Uint8Array(str.length * 2 + (bom ? 2 : 0));
+    let o = 0;
+    if (bom) { out[0] = 0xff; out[1] = 0xfe; o = 2; }
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i);
+      if (endian === 'le') { out[o++] = c & 255; out[o++] = c >> 8; } else { out[o++] = c >> 8; out[o++] = c & 255; }
+    }
+    return out;
+  }
+  const DASHES = ['-', '/', '–', '—', '―'];
+  function windash(x) {
+    if (x instanceof Uint8Array) throw new SigmaError('windash needs text, not encoded bytes');
+    let acc = [[]];
+    for (const t of x) {
+      if (isW(t)) { acc = acc.map(a => [...a, t]); continue; }
+      const idx = [];
+      for (let i = 0; i < t.length; i++) {
+        if ((t[i] === '-' || t[i] === '/') && (i === 0 || /\s/.test(t[i - 1])) && i + 1 < t.length && !/\s/.test(t[i + 1])) idx.push(i);
+      }
+      let opts = [t];
+      for (const i of idx) opts = opts.flatMap(o => DASHES.map(d => o.slice(0, i) + d + o.slice(i + 1)));
+      acc = acc.flatMap(a => opts.map(o => [...a, o]));
+      if (acc.length > 600) throw new SigmaError('windash would create too many variants for this value');
+    }
+    return acc.map(norm);
+  }
+
+  function applyMod(m, x) {
+    switch (m) {
+      case 'base64': return [[b64(bytesOf(x))]];
+      case 'base64offset': {
+        const bytes = bytesOf(x);
+        const out = [];
+        for (let i = 0; i < 3; i++) {
+          const padded = new Uint8Array(bytes.length + i);
+          padded.fill(32, 0, i);
+          padded.set(bytes, i);
+          const e = b64(padded);
+          const end = [null, -3, -2][(bytes.length + i) % 3];
+          out.push([e.slice([0, 2, 3][i], end === null ? undefined : end)]);
+        }
+        return out;
+      }
+      case 'wide': case 'utf16le': return [utf16(plainText(asTokens(x)), 'le', false)];
+      case 'utf16be': return [utf16(plainText(asTokens(x)), 'be', false)];
+      case 'utf16': return [utf16(plainText(asTokens(x)), 'le', true)];
+      case 'windash': return windash(x);
+      case 'contains': return [norm([W('*'), ...asTokens(x), W('*')])];
+      case 'startswith': return [norm([...asTokens(x), W('*')])];
+      case 'endswith': return [norm([W('*'), ...asTokens(x)])];
+    }
+    return [x];
+  }
+
+  const MOD_VALUE = new Set(['base64', 'base64offset', 'wide', 'utf16le', 'utf16be', 'utf16', 'windash', 'contains', 'startswith', 'endswith']);
+  const MOD_TYPE = new Set(['re', 'cidr', 'exists', 'lt', 'lte', 'gt', 'gte', 'fieldref', 'expand']);
+  const MOD_FLAG = new Set(['all', 'cased', 'i', 'm', 's']);
+  const CMP = { lt: '<', lte: '<=', gt: '>', gte: '>=' };
+
+  function scalar(v) {
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    return v;
+  }
+
+  function valueNode(field, mods, v) {
+    v = scalar(v);
+    const typeMods = mods.filter(m => MOD_TYPE.has(m));
+    if (typeMods.length > 1) throw new SigmaError(`Modifiers ${typeMods.join(' and ')} cannot be combined`);
+    const flags = { cs: mods.includes('cased'), i: mods.includes('i'), m: mods.includes('m'), s: mods.includes('s') };
+    const t = typeMods[0];
+    if (t) {
+      if (!field) throw new SigmaError(`Modifier "${t}" needs a field name`);
+      switch (t) {
+        case 'exists': return { t: 'exists', f: field, v: v === true || String(v).toLowerCase() === 'true' };
+        case 're': return { t: 're', f: field, v: String(v), flags };
+        case 'cidr': return { t: 'cidr', f: field, v: String(v) };
+        case 'fieldref': return { t: 'ref', f: field, v: String(v) };
+        case 'expand': throw new SigmaError('The "expand" modifier needs placeholder values, which this page cannot resolve');
+        default: {
+          const n = Number(v);
+          if (!Number.isFinite(n)) throw new SigmaError(`Modifier "${t}" on ${field} needs a number, got "${v}"`);
+          return { t: 'cmp', f: field, op: CMP[t], v: n };
+        }
+      }
+    }
+    const strMods = mods.filter(m => MOD_VALUE.has(m));
+    if (!field) {
+      if (v === null) throw new SigmaError('A keyword search value cannot be null');
+      v = String(v);
+    }
+    if (v === null) return { t: 'null', f: field };
+    if (typeof v === 'boolean' && !strMods.length) return { t: 'bool', f: field, v };
+    if (typeof v === 'number' && !strMods.length) return { t: 'num', f: field, v };
+    let vals = [parseStr(String(v))];
+    for (const m of strMods) vals = vals.flatMap(x => applyMod(m, x));
+    const nodes = vals.map(x => ({ t: 'str', f: field, v: norm(asTokens(x)), cs: flags.cs, kw: !field }));
+    return nodes.length > 1 ? { t: 'or', c: nodes } : nodes[0];
+  }
+
+  const isObj = v => v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date);
+
+  function itemNode(key, val) {
+    const parts = String(key).split('|');
+    const field = parts[0] || null;
+    const mods = parts.slice(1).map(s => s.trim().toLowerCase());
+    for (const m of mods) {
+      if (!MOD_VALUE.has(m) && !MOD_TYPE.has(m) && !MOD_FLAG.has(m)) throw new SigmaError(`Unsupported modifier "${m}" on ${field || 'keyword'}`);
+    }
+    const arr = Array.isArray(val) ? val : [val];
+    if (!arr.length) throw new SigmaError(`Field "${field}" has an empty value list`);
+    const nodes = arr.map(v => {
+      if (isObj(v) || Array.isArray(v)) throw new SigmaError(`Field "${field}" has a nested value, which Sigma does not allow`);
+      return valueNode(field, mods, v);
+    });
+    if (nodes.length === 1) return nodes[0];
+    return { t: mods.includes('all') ? 'and' : 'or', c: nodes };
+  }
+
+  function mapNodeItems(map) {
+    const kids = Object.entries(map).map(([k, v]) => itemNode(k, v));
+    if (!kids.length) throw new SigmaError('A selection is empty');
+    return kids.length > 1 ? { t: 'and', c: kids } : kids[0];
+  }
+
+  function selNode(v) {
+    if (Array.isArray(v)) {
+      const kids = v.map(x => (isObj(x) ? mapNodeItems(x) : valueNode(null, [], x)));
+      if (!kids.length) throw new SigmaError('A selection is an empty list');
+      return kids.length > 1 ? { t: 'or', c: kids } : kids[0];
+    }
+    if (isObj(v)) return mapNodeItems(v);
+    return valueNode(null, [], v);
+  }
+
+  // ---------- condition parser ----------
+  function globToRe(p) {
+    return new RegExp('^' + p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
+  }
+
+  function parseCondition(str, named) {
+    if (str.includes('|')) throw new SigmaError('Aggregation conditions (count, near, min, max and so on) are not supported');
+    const toks = str.replace(/([()])/g, ' $1 ').trim().split(/\s+/).filter(Boolean);
+    let p = 0;
+    const peek = () => toks[p];
+    const next = () => toks[p++];
+    const low = t => (t === undefined ? t : t.toLowerCase());
+
+    function pOr() {
+      const n = [pAnd()];
+      while (low(peek()) === 'or') { next(); n.push(pAnd()); }
+      return n.length > 1 ? { t: 'or', c: n } : n[0];
+    }
+    function pAnd() {
+      const n = [pNot()];
+      while (low(peek()) === 'and') { next(); n.push(pNot()); }
+      return n.length > 1 ? { t: 'and', c: n } : n[0];
+    }
+    function pNot() {
+      if (low(peek()) === 'not') { next(); return { t: 'not', c: pNot() }; }
+      return pAtom();
+    }
+    function pAtom() {
+      const t = next();
+      if (t === undefined) throw new SigmaError('The condition ends too early');
+      if (t === '(') {
+        const n = pOr();
+        if (next() !== ')') throw new SigmaError('The condition is missing a closing parenthesis');
+        return n;
+      }
+      if ((t === '1' || low(t) === 'all') && low(peek()) === 'of') {
+        next();
+        const pat = next();
+        if (pat === undefined) throw new SigmaError(`"${t} of" needs a pattern or "them"`);
+        let names;
+        if (low(pat) === 'them') names = Object.keys(named).filter(k => !k.startsWith('_'));
+        else { const re = globToRe(pat); names = Object.keys(named).filter(k => re.test(k)); }
+        if (!names.length) throw new SigmaError(`"${t} of ${pat}" matches no selection`);
+        const nodes = names.map(k => named[k]);
+        return nodes.length === 1 ? nodes[0] : { t: low(t) === 'all' ? 'and' : 'or', c: nodes };
+      }
+      if (!Object.prototype.hasOwnProperty.call(named, t)) throw new SigmaError(`The condition uses "${t}", which is not defined in the detection`);
+      return named[t];
+    }
+
+    const n = pOr();
+    if (p < toks.length) throw new SigmaError(`Unexpected "${toks[p]}" in the condition`);
+    return n;
+  }
+
+  function ruleToAst(rule) {
+    const det = rule.detection;
+    if (!isObj(det)) throw new SigmaError('The rule has no detection section');
+    if (det.condition === undefined || det.condition === null) throw new SigmaError('The detection section has no condition');
+    const named = {};
+    for (const [k, v] of Object.entries(det)) {
+      if (k === 'condition' || k === 'timeframe') continue;
+      named[k] = selNode(v);
+    }
+    const conds = Array.isArray(det.condition) ? det.condition : [det.condition];
+    const nodes = conds.map(c => parseCondition(String(c), named));
+    return nodes.length > 1 ? { t: 'or', c: nodes } : nodes[0];
+  }
+
+  function simplify(n) {
+    if (n.t === 'and' || n.t === 'or') {
+      const c = [];
+      for (const k of n.c) {
+        const s = simplify(k);
+        if (s.t === n.t) c.push(...s.c); else c.push(s);
+      }
+      return c.length === 1 ? c[0] : { t: n.t, c };
+    }
+    if (n.t === 'not') {
+      const s = simplify(n.c);
+      return s.t === 'not' ? s.c : { t: 'not', c: s };
+    }
+    return n;
+  }
+
+  const some = (n, p) => (n.t === 'and' || n.t === 'or' ? n.c.some(c => some(c, p)) : n.t === 'not' ? some(n.c, p) : p(n));
+
+  // ---------- processing pipelines ----------
+  const PIPE_TYPES = ['field_name_mapping', 'field_name_prefix', 'drop_detection_item', 'add_condition', 'set_state'];
+
+  function parsePipeline(text) {
+    if (!text || !text.trim()) return null;
+    const d = jsyaml.load(text);
+    if (!isObj(d)) throw new SigmaError('A pipeline must be a YAML mapping with a transformations list');
+    if (d.transformations !== undefined && !Array.isArray(d.transformations)) throw new SigmaError('"transformations" must be a list');
+    for (const t of d.transformations || []) {
+      if (!isObj(t) || !PIPE_TYPES.includes(t.type)) throw new SigmaError(`Unsupported pipeline transformation "${t && t.type}". Supported: ${PIPE_TYPES.join(', ')}`);
+    }
+    return d;
+  }
+
+  function ruleCondOk(conds, rule) {
+    const ls = isObj(rule.logsource) ? rule.logsource : {};
+    for (const c of conds || []) {
+      if (c.type !== 'logsource') throw new SigmaError(`Unsupported rule condition "${c.type}". Only logsource is supported`);
+      for (const k of ['category', 'product', 'service']) {
+        if (c[k] !== undefined && String(ls[k] || '').toLowerCase() !== String(c[k]).toLowerCase()) return false;
+      }
+    }
+    return true;
+  }
+
+  function mapNode(n, fn) {
+    if (n.t === 'and' || n.t === 'or') {
+      const c = n.c.map(x => mapNode(x, fn)).filter(Boolean);
+      return c.length ? { t: n.t, c } : null;
+    }
+    if (n.t === 'not') {
+      const c = mapNode(n.c, fn);
+      return c ? { t: 'not', c } : null;
+    }
+    return fn(n);
+  }
+
+  function applyPipeline(ast, pipe, rule, state) {
+    let n = ast;
+    const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+    for (const t of pipe.transformations || []) {
+      if (!ruleCondOk(t.rule_conditions, rule)) continue;
+      switch (t.type) {
+        case 'field_name_mapping': {
+          const m = t.mapping || {};
+          n = mapNode(n, l => {
+            let out = l;
+            if (l.t === 'ref' && has(m, l.v)) out = { ...out, v: String(Array.isArray(m[l.v]) ? m[l.v][0] : m[l.v]) };
+            if (!l.f || !has(m, l.f)) return out;
+            const to = m[l.f];
+            if (Array.isArray(to)) return { t: 'or', c: to.map(f => ({ ...out, f: String(f) })) };
+            return { ...out, f: String(to) };
+          });
+          break;
+        }
+        case 'field_name_prefix':
+          n = mapNode(n, l => (l.f ? { ...l, f: String(t.prefix || '') + l.f } : l));
+          break;
+        case 'drop_detection_item': {
+          const fields = t.fields || [];
+          n = mapNode(n, l => (fields.includes(l.f) ? null : l));
+          break;
+        }
+        case 'add_condition': {
+          const parts = Object.entries(t.conditions || {}).map(([f, v]) => {
+            const vs = Array.isArray(v) ? v : [v];
+            const ns = vs.map(x => (typeof x === 'number' ? { t: 'num', f, v: x } : typeof x === 'boolean' ? { t: 'bool', f, v: x } : { t: 'str', f, v: parseStr(String(x)), cs: false }));
+            return ns.length > 1 ? { t: 'or', c: ns } : ns[0];
+          });
+          if (parts.length && n) {
+            let cond = parts.length > 1 ? { t: 'and', c: parts } : parts[0];
+            if (t.negated) cond = { t: 'not', c: cond };
+            n = { t: 'and', c: [cond, n] };
+          }
+          break;
+        }
+        case 'set_state':
+          state[t.key] = t.val;
+          break;
+      }
+      if (!n) throw new SigmaError('The pipeline removed every detection item');
+    }
+    return n;
+  }
+
+  // ---------- backends ----------
+  function emit(n, B, parent) {
+    if (n.t === 'and' || n.t === 'or') {
+      const parts = n.t === 'or' && B.collapse ? B.collapse(n.c, c => emit(c, B, n.t)) : n.c.map(c => emit(c, B, n.t));
+      if (parts.length === 1) return parts[0];
+      const s = parts.join(` ${B.ops[n.t]} `);
+      return parent && parent !== n.t ? `(${s})` : s;
+    }
+    if (n.t === 'not') return B.not(emit(n.c, B, B.bareNot ? null : 'not'));
+    return B.leaf(n);
+  }
+
+  function collapseOr(kids, rec, pred, fmt) {
+    const groups = new Map();
+    for (const k of kids) {
+      if (pred(k)) {
+        const g = groups.get(k.f);
+        if (g) g.push(k); else groups.set(k.f, [k]);
+      }
+    }
+    const done = new Set();
+    const out = [];
+    for (const k of kids) {
+      if (pred(k)) {
+        const g = groups.get(k.f);
+        if (g.length > 1) {
+          if (!done.has(k.f)) { done.add(k.f); out.push(fmt(k.f, g)); }
+          continue;
+        }
+      }
+      out.push(rec(k));
+    }
+    return out;
+  }
+
+  const reEsc = (s, slash) => s.replace(slash ? /[.*+?^${}()|[\]\\\/]/g : /[.*+?^${}()|[\]\\]/g, '\\$&');
+  function globRegex(arr, slash) {
+    if (onlyStar(arr)) return '.*';
+    let a = arr.slice();
+    let pre = '^';
+    let post = '$';
+    if (startsW(a)) { a = a.slice(1); pre = ''; }
+    if (endsW(a)) { a = a.slice(0, -1); post = ''; }
+    return pre + a.map(t => (isW(t) ? (t.w === '*' ? '.*' : '.') : reEsc(t, slash))).join('') + post;
+  }
+  const reFlags = f => {
+    const s = (f.i ? 'i' : '') + (f.m ? 'm' : '') + (f.s ? 's' : '');
+    return s ? `(?${s})` : '';
+  };
+  const dq = s => '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+
+  function runSplunk(ast, ctx) {
+    const val = arr => {
+      if (arr.some(t => isW(t) && t.w === '?')) ctx.warn('Splunk search has no single character wildcard, so ? was turned into *.');
+      return arr.map(t => (isW(t) ? '*' : t)).join('');
+    };
+    const B = {
+      ops: { and: 'AND', or: 'OR' },
+      not: s => 'NOT ' + s,
+      collapse: (kids, rec) => collapseOr(kids, rec, k => k.t === 'str' && k.f && !k.cs, (f, g) => `${f} IN (${g.map(x => dq(val(x.v))).join(', ')})`),
+      leaf(n) {
+        const f = n.f;
+        switch (n.t) {
+          case 'str':
+            if (n.cs) ctx.warn('Splunk search ignores case, so the cased modifier is not enforced.');
+            return f ? `${f}=${dq(val(n.v))}` : dq(val(n.v));
+          case 'num': case 'bool': return `${f}=${n.v}`;
+          case 'null': return `NOT ${f}=*`;
+          case 'exists': return n.v ? `${f}=*` : `NOT ${f}=*`;
+          case 'cidr': return `${f}=${dq(n.v)}`;
+          case 'cmp': return `${f}${n.op}${n.v}`;
+        }
+        throw new SigmaError('Internal error: unexpected node in Splunk search mode');
+      }
+    };
+    const hard = n => some(n, x => x.t === 're' || x.t === 'ref');
+    const kids = ast.t === 'and' ? ast.c : [ast];
+    const rx = [];
+    const keep = [];
+    for (const k of kids) {
+      if (k.t === 're') rx.push([k, false]);
+      else if (k.t === 'not' && k.c.t === 're') rx.push([k.c, true]);
+      else keep.push(k);
+    }
+    if (keep.some(hard)) {
+      const wf = f => (/^[A-Za-z_]\w*$/.test(f) ? f : "'" + f.replace(/'/g, "\\'") + "'");
+      const WB = {
+        ops: { and: 'AND', or: 'OR' },
+        not: s => 'NOT ' + s,
+        leaf(n) {
+          const f = n.f && wf(n.f);
+          switch (n.t) {
+            case 'str':
+              if (!n.f) return `searchmatch(${dq(val(n.v))})`;
+              if (isPlain(n.v)) return n.cs ? `${f}=${dq(n.v.join(''))}` : `lower(${f})=${dq(n.v.join('').toLowerCase())}`;
+              return `match(${f}, ${dq((n.cs ? '' : '(?i)') + globRegex(n.v))})`;
+            case 'num': case 'bool': return `${f}=${n.v}`;
+            case 'null': return `isnull(${f})`;
+            case 'exists': return n.v ? `isnotnull(${f})` : `isnull(${f})`;
+            case 're': return `match(${f}, ${dq(reFlags(n.flags) + n.v)})`;
+            case 'cidr': return `cidrmatch(${dq(n.v)}, ${f})`;
+            case 'cmp': return `${f}${n.op}${n.v}`;
+            case 'ref': return `${f}=${wf(n.v)}`;
+          }
+          throw new SigmaError('Internal error: unexpected node in Splunk where mode');
+        }
+      };
+      ctx.warn('This rule has a regex inside an OR or a field comparison, so it is written as a where expression. Add an index or sourcetype to the left of the pipe to keep it fast.');
+      return `* | where ${emit(ast, WB, null)}`;
+    }
+    const search = keep.length ? emit(keep.length > 1 ? { t: 'and', c: keep } : keep[0], B, null) : '*';
+    const suffix = rx.map(([n, neg]) => `\n| regex ${n.f}${neg ? '!=' : '='}${dq(reFlags(n.flags) + n.v)}`).join('');
+    return search + suffix;
+  }
+
+  function runLogScale(ast, ctx) {
+    const style = ctx.opts.lsStyle || 'regex';
+    const fld = f => (/^[#@\w.\-:]+$/.test(f) ? f : dq(f));
+    const flagsLS = f => (f.i ? 'i' : '') + (f.m ? 'm' : '') + (f.s ? 'd' : '');
+    const wild = a => {
+      if (a.some(t => isW(t) && t.w === '?')) ctx.warn('LogScale wildcards only support *, so ? was turned into *.');
+      return a.map(t => (isW(t) ? '*' : t)).join('');
+    };
+    const B = {
+      ops: { and: 'and', or: 'or' },
+      not: s => 'not ' + s,
+      leaf(n) {
+        const f = n.f && fld(n.f);
+        switch (n.t) {
+          case 'str': {
+            if (n.kw) return `/${globRegex(norm([W('*'), ...n.v, W('*')]), true)}/${n.cs ? '' : 'i'}`;
+            if (n.f[0] === '#') {
+              const s = wild(n.v);
+              return `${f}=${/^[\w.\-*:]+$/.test(s) ? s : dq(s)}`;
+            }
+            if (style === 'wildcard') {
+              ctx.warn('Wildcard style is faster but LogScale field matching is case sensitive, so results can differ from the Sigma rule.');
+              return `${f}=${dq(wild(n.v))}`;
+            }
+            if (onlyStar(n.v)) return `${f}=*`;
+            return `${f}=/${globRegex(n.v, true)}/${n.cs ? '' : 'i'}`;
+          }
+          case 'num': case 'bool': return `${f}=${n.v}`;
+          case 'null': return `not ${f}=*`;
+          case 'exists': return n.v ? `${f}=*` : `not ${f}=*`;
+          case 're': return `${f}=/${n.v.replace(/(?<!\\)\//g, '\\/')}/${flagsLS(n.flags)}`;
+          case 'cidr': return `cidr(${f}, subnet=${dq(n.v)})`;
+          case 'cmp': return `${f}${n.op}${n.v}`;
+          case 'ref': return `test(${f}==${fld(n.v)})`;
+        }
+        throw new SigmaError('Internal error: unexpected node in LogScale backend');
+      }
+    };
+    return emit(ast, B, null);
+  }
+
+  function runLucene(ast, ctx) {
+    const esc = s => s.replace(/([+\-=&|><!(){}\[\]^"~*?:\\\/\s])/g, '\\$1');
+    const val = arr => arr.map(t => (isW(t) ? t.w : esc(t))).join('');
+    const fld = f => f.replace(/([\s:()\\"])/g, '\\$1');
+    let noted = false;
+    const B = {
+      ops: { and: 'AND', or: 'OR' },
+      not: s => 'NOT ' + s,
+      leaf(n) {
+        const f = n.f && fld(n.f);
+        switch (n.t) {
+          case 'str':
+            if (!noted) { noted = true; ctx.warn('Lucene term and wildcard matching is case sensitive on keyword fields. Use a lowercase normalizer or a case insensitive mapping if the rule needs it.'); }
+            if (n.kw) return isPlain(n.v) ? dq(n.v.join('')) : val(norm([W('*'), ...n.v, W('*')]));
+            return `${f}:${val(n.v)}`;
+          case 'num': case 'bool': return `${f}:${n.v}`;
+          case 'null': return `NOT _exists_:${f}`;
+          case 'exists': return n.v ? `_exists_:${f}` : `NOT _exists_:${f}`;
+          case 're':
+            if (n.flags.i || n.flags.m || n.flags.s) ctx.warn('Lucene regular expressions have no i, m or s flags, so they were ignored.');
+            return `${f}:/${n.v.replace(/(?<!\\)\//g, '\\/')}/`;
+          case 'cidr': return `${f}:${dq(n.v)}`;
+          case 'cmp': return `${f}:${n.op}${n.v}`;
+          case 'ref': throw new SigmaError('Field references cannot be written as a Lucene query string');
+        }
+        throw new SigmaError('Internal error: unexpected node in Lucene backend');
+      }
+    };
+    return emit(ast, B, null);
+  }
+
+  function runKql(ast, ctx) {
+    const kq = s => '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+    const kv = s => '@"' + s.replace(/"/g, '""') + '"';
+    const fld = f => (/^[A-Za-z_]\w*$/.test(f) ? f : `['${f.replace(/'/g, "\\'")}']`);
+    const inner = a => a.slice(startsW(a) ? 1 : 0, endsW(a) ? a.length - 1 : a.length);
+    function strLeaf(n) {
+      const f = fld(n.f);
+      const a = n.v;
+      const cs = n.cs;
+      if (onlyStar(a)) return `isnotnull(${f})`;
+      if (isPlain(a)) return `${f} ${cs ? '==' : '=~'} ${kq(a.join(''))}`;
+      const s = startsW(a);
+      const e = endsW(a);
+      const mid = inner(a);
+      if (mid.length && isPlain(mid)) {
+        const t = kq(mid.join(''));
+        if (s && e) return `${f} ${cs ? 'contains_cs' : 'contains'} ${t}`;
+        if (e) return `${f} ${cs ? 'startswith_cs' : 'startswith'} ${t}`;
+        if (s) return `${f} ${cs ? 'endswith_cs' : 'endswith'} ${t}`;
+      }
+      return `${f} matches regex ${kv((cs ? '' : '(?i)') + globRegex(a))}`;
+    }
+    const B = {
+      ops: { and: 'and', or: 'or' },
+      bareNot: true,
+      not: s => `not(${s})`,
+      collapse: (kids, rec) => collapseOr(kids, rec, k => k.t === 'str' && k.f && !k.cs && isPlain(k.v) && !onlyStar(k.v), (f, g) => `${fld(f)} in~ (${g.map(x => kq(x.v.join(''))).join(', ')})`),
+      leaf(n) {
+        const f = n.f && fld(n.f);
+        switch (n.t) {
+          case 'str': {
+            if (n.kw) {
+              const mid = inner(n.v);
+              if (!isPlain(mid)) throw new SigmaError('A keyword with a wildcard in the middle cannot be written in KQL');
+              return `* ${n.cs ? 'contains_cs' : 'contains'} ${kq(mid.join(''))}`;
+            }
+            return strLeaf(n);
+          }
+          case 'num': return `${f} == ${n.v}`;
+          case 'bool': return `${f} == ${n.v}`;
+          case 'null': return `isnull(${f})`;
+          case 'exists': return n.v ? `isnotnull(${f})` : `isnull(${f})`;
+          case 're': return `${f} matches regex ${kv(reFlags(n.flags) + n.v)}`;
+          case 'cidr': return `${n.v.includes(':') ? 'ipv6_is_in_range' : 'ipv4_is_in_range'}(${f}, ${kq(n.v)})`;
+          case 'cmp': return `${f} ${n.op} ${n.v}`;
+          case 'ref': return `${f} == ${fld(n.v)}`;
+        }
+        throw new SigmaError('Internal error: unexpected node in KQL backend');
+      }
+    };
+    const expr = emit(ast, B, null);
+    const table = ctx.state.table || ctx.opts.table || '';
+    if (!table) ctx.warn('No table is set. Replace TableName, or set one in the options or with a set_state step in the pipeline.');
+    return `${table || 'TableName'}\n| where ${expr}`;
+  }
+
+  const BACKENDS = [
+    { id: 'splunk', label: 'Splunk SPL', run: runSplunk },
+    { id: 'logscale', label: 'Falcon NG-SIEM (LogScale)', run: runLogScale },
+    { id: 'lucene', label: 'Elastic Lucene', run: runLucene },
+    { id: 'kql', label: 'Microsoft KQL', run: runKql }
+  ];
+
+  function run(id, rule, opts) {
+    const b = BACKENDS.find(x => x.id === id);
+    const warnings = new Set();
+    const ctx = { opts: opts || {}, state: rule.state || {}, warn: m => warnings.add(m) };
+    const query = b.run(rule.ast, ctx);
+    return { query, warnings: [...warnings] };
+  }
+
+  // ---------- tree view ----------
+  function leafText(n) {
+    const f = n.f || '(keyword)';
+    switch (n.t) {
+      case 'str': return `${f} ~ ${strText(n.v)}${n.cs ? '  [cased]' : ''}`;
+      case 'num': case 'bool': return `${f} = ${n.v}`;
+      case 'null': return `${f} is null`;
+      case 'exists': return `${f} exists = ${n.v}`;
+      case 're': return `${f} matches /${n.v}/${(n.flags.i ? 'i' : '') + (n.flags.m ? 'm' : '') + (n.flags.s ? 's' : '')}`;
+      case 'cidr': return `${f} in ${n.v}`;
+      case 'cmp': return `${f} ${n.op} ${n.v}`;
+      case 'ref': return `${f} = field ${n.v}`;
+    }
+    return n.t;
+  }
+  function treeText(n, ind) {
+    const p = '  '.repeat(ind || 0);
+    if (n.t === 'and' || n.t === 'or') return p + n.t.toUpperCase() + '\n' + n.c.map(c => treeText(c, (ind || 0) + 1)).join('\n');
+    if (n.t === 'not') return p + 'NOT\n' + treeText(n.c, (ind || 0) + 1);
+    return p + leafText(n);
+  }
+
+  // ---------- top level ----------
+  const yamlMsg = e => (e && e.reason ? `${e.reason}${e.mark ? ` (line ${e.mark.line + 1}, column ${e.mark.column + 1})` : ''}` : (e && e.message) || String(e));
+
+  function buildRule(d, pipe) {
+    const r = { meta: {}, ast: null, state: {}, error: null };
+    if (!isObj(d)) { r.error = 'This YAML document is not a Sigma rule. A rule is a mapping with title, logsource and detection.'; return r; }
+    r.meta = {
+      title: d.title !== undefined ? String(d.title) : '',
+      id: d.id !== undefined ? String(d.id) : '',
+      level: d.level !== undefined ? String(d.level).toLowerCase() : '',
+      status: d.status !== undefined ? String(d.status) : '',
+      description: d.description !== undefined ? String(d.description) : '',
+      tags: Array.isArray(d.tags) ? d.tags.map(String) : [],
+      logsource: isObj(d.logsource) ? d.logsource : {}
+    };
+    try {
+      if (d.correlation || d.action) throw new SigmaError('Correlation rules and rule collections (action: global, repeat, reset) are not supported');
+      let ast = ruleToAst(d);
+      if (pipe) ast = applyPipeline(ast, pipe, d, r.state);
+      r.ast = simplify(ast);
+    } catch (e) { r.error = e.message; }
+    return r;
+  }
+
+  function analyze(text, pipeText) {
+    const res = { rules: [], error: null, pipe: null, pipeError: null };
+    try { res.pipe = parsePipeline(pipeText); } catch (e) { res.pipeError = yamlMsg(e); }
+    let docs;
+    try { docs = jsyaml.loadAll(text).filter(d => d !== null && d !== undefined); } catch (e) { res.error = yamlMsg(e); return res; }
+    res.rules = docs.map(d => buildRule(d, res.pipeError ? null : res.pipe));
+    return res;
+  }
+
+  return { analyze, run, treeText, BACKENDS, _internal: { applyMod, parseStr, globRegex } };
+})();
+if (typeof module !== 'undefined') module.exports = Sigma;
+
+(function () {
+  'use strict';
+  const D = SIGMA_DATA;
+  const $ = id => document.getElementById(id);
+
+  function h(tag, attrs, ...kids) {
+    const e = document.createElement(tag);
+    if (attrs) {
+      for (const [k, v] of Object.entries(attrs)) {
+        if (v == null || v === false) continue;
+        if (k === 'class') e.className = v;
+        else if (k === 'text') e.textContent = v;
+        else e.setAttribute(k, v === true ? '' : v);
+      }
+    }
+    for (const k of kids.flat()) {
+      if (k == null || k === false) continue;
+      e.append(k.nodeType ? k : document.createTextNode(String(k)));
+    }
+    return e;
+  }
+
+  const TAB_LABEL = { splunk: 'Splunk', logscale: 'NG-SIEM', lucene: 'Elastic', kql: 'KQL', all: 'All' };
+  const TABS = [...Sigma.BACKENDS.map(b => b.id), 'all'];
+  const ruleEl = $('sg-rule');
+  const pipeEl = $('sg-pipe');
+  const results = $('sg-results');
+  const tabsEl = $('sg-tabs');
+  const sgMain = $('sigma-main');
+  const iocMain = $('ioc-main');
+  let active = 'splunk';
+  let analysis = null;
+  let timer = null;
+  let uid = 0;
+
+  // ----- setup -----
+  const exSel = $('sg-example');
+  exSel.append(h('option', { value: '', text: 'Load example' }));
+  for (const [k, s] of Object.entries(D.samples)) exSel.append(h('option', { value: k, text: s.label }));
+  const preSel = $('sg-preset');
+  preSel.append(h('option', { value: '', text: 'No pipeline' }));
+  for (const [k, p] of Object.entries(D.pipes)) preSel.append(h('option', { value: k, text: p.label }));
+  ruleEl.value = D.samples.certutil.yaml;
+
+  const opts = () => ({ lsStyle: $('sg-ls').value, table: $('sg-table').value.trim() });
+
+  // ----- textarea sizing -----
+  function fit(ta) {
+    if (!ta.offsetParent) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight + 2, 420) + 'px';
+  }
+  const fitAll = () => sgMain.querySelectorAll('textarea.sg-q').forEach(fit);
+
+  // ----- tabs -----
+  function selectTab(id) {
+    active = id;
+    TABS.forEach(t => {
+      const b = $('sg-tab-' + t);
+      b.setAttribute('aria-selected', String(t === id));
+      b.tabIndex = t === id ? 0 : -1;
+    });
+    results.setAttribute('aria-labelledby', 'sg-tab-' + id);
+    render();
+  }
+  TABS.forEach((id, i) => {
+    const b = h('button', { type: 'button', role: 'tab', id: 'sg-tab-' + id, 'aria-controls': 'sg-results', 'aria-selected': String(id === active), tabindex: id === active ? '0' : '-1', text: TAB_LABEL[id] });
+    b.addEventListener('click', () => selectTab(id));
+    b.addEventListener('keydown', e => {
+      const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!d) return;
+      const next = TABS[(i + d + TABS.length) % TABS.length];
+      selectTab(next);
+      $('sg-tab-' + next).focus();
+      e.preventDefault();
+    });
+    tabsEl.append(b);
+  });
+  results.setAttribute('aria-labelledby', 'sg-tab-' + active);
+
+  // ----- rendering -----
+  const GRAM = { 'data-gramm': 'false', 'data-gramm_editor': 'false', 'data-enable-grammarly': 'false', autocomplete: 'off', autocorrect: 'off', autocapitalize: 'off' };
+
+  function outBlock(rule, backend) {
+    let res = null;
+    let err = null;
+    try { res = Sigma.run(backend.id, rule, opts()); } catch (e) { err = e.message; }
+    const frag = document.createDocumentFragment();
+    frag.append(h('p', { class: 'sub', text: backend.label }));
+    if (err) {
+      frag.append(h('ul', { class: 'notes' }, h('li', { class: 'bad', text: err })));
+      return frag;
+    }
+    const tid = 'sg-q-' + (++uid);
+    const ta = h('textarea', { ...GRAM, class: 'sg-q', id: tid, readonly: true, spellcheck: 'false', 'aria-label': backend.label + ' query' });
+    ta.value = res.query;
+    frag.append(ta,
+      h('div', { class: 'actions' },
+        h('button', { type: 'button', class: 'primary', 'data-copy': tid, text: 'Copy query' }),
+        h('span', { class: 'status', 'aria-live': 'polite' })));
+    if (res.warnings.length) frag.append(h('ul', { class: 'notes' }, res.warnings.map(w => h('li', { class: 'warn', text: w }))));
+    return frag;
+  }
+
+  function tagEl(t) {
+    const m = /^attack\.t(\d{4})(?:\.(\d{3}))?$/i.exec(t);
+    if (m) {
+      const path = m[2] ? m[1] + '/' + m[2] : m[1];
+      return h('a', { class: 'tag', href: 'https://attack.mitre.org/techniques/T' + path + '/', target: '_blank', rel: 'noopener noreferrer', text: t });
+    }
+    return h('span', { class: 'tag', text: t });
+  }
+
+  function ruleCard(r) {
+    const m = r.meta;
+    const ls = Object.entries(m.logsource || {}).map(([k, v]) => k + ' ' + v).join(' / ');
+    const meta = [ls && 'Logsource: ' + ls, m.status && 'Status: ' + m.status, m.id && 'ID: ' + m.id].filter(Boolean).join('  |  ');
+    const card = h('div', { class: 'layer' },
+      h('p', { class: 'layer-h' }, m.title || 'Untitled rule', m.level ? h('span', { class: 'lvl lvl-' + m.level, text: m.level }) : null),
+      meta ? h('p', { class: 'layer-meta', text: meta }) : null,
+      m.description ? h('p', { class: 'layer-meta', text: m.description }) : null,
+      m.tags.length ? h('div', { class: 'tags' }, m.tags.map(tagEl)) : null);
+    if (r.error) {
+      card.append(h('ul', { class: 'notes' }, h('li', { class: 'bad', text: r.error })));
+      return card;
+    }
+    const list = active === 'all' ? Sigma.BACKENDS : Sigma.BACKENDS.filter(b => b.id === active);
+    for (const b of list) card.append(outBlock(r, b));
+    card.append(h('details', null, h('summary', { text: 'Parsed detection logic' }), h('div', { class: 'inner' }, h('pre', { class: 'hex', text: Sigma.treeText(r.ast) }))));
+    return card;
+  }
+
+  function render() {
+    results.replaceChildren();
+    const a = analysis;
+    const count = $('sg-count');
+    const notes = [];
+    if (a.pipeError) notes.push(h('li', { class: 'bad', text: 'Pipeline error: ' + a.pipeError + '. Rules are shown without the pipeline.' }));
+    if (a.error) notes.push(h('li', { class: 'bad', text: 'YAML error: ' + a.error }));
+    if (notes.length) results.append(h('ul', { class: 'notes' }, notes));
+    if (a.error) { count.textContent = ''; return; }
+    if (!a.rules.length) {
+      results.append(h('p', { class: 'empty', text: 'Paste a Sigma rule or load an example to see the converted queries.' }));
+      count.textContent = '';
+      return;
+    }
+    count.textContent = a.rules.length + (a.rules.length === 1 ? ' rule' : ' rules');
+    for (const r of a.rules) results.append(ruleCard(r));
+    fitAll();
+  }
+
+  function pipeStatus() {
+    const el = $('sg-pipe-status');
+    if (analysis.pipeError) { el.textContent = 'Pipeline error: ' + analysis.pipeError; return; }
+    if (!analysis.pipe) { el.textContent = 'No pipeline active. Field names are used as written in the rule.'; return; }
+    const n = (analysis.pipe.transformations || []).length;
+    el.textContent = 'Pipeline active: ' + (analysis.pipe.name || 'unnamed') + ' (' + n + (n === 1 ? ' step)' : ' steps)');
+  }
+
+  function update() {
+    analysis = Sigma.analyze(ruleEl.value, pipeEl.value);
+    pipeStatus();
+    render();
+  }
+  const schedule = () => { clearTimeout(timer); timer = setTimeout(update, 200); };
+
+  // ----- events -----
+  ruleEl.addEventListener('input', schedule);
+  pipeEl.addEventListener('input', () => { preSel.value = ''; schedule(); });
+  $('sg-ls').addEventListener('change', render);
+  $('sg-table').addEventListener('input', render);
+  exSel.addEventListener('change', () => {
+    const s = D.samples[exSel.value];
+    if (!s) return;
+    ruleEl.value = s.yaml;
+    exSel.value = '';
+    update();
+  });
+  preSel.addEventListener('change', () => {
+    const p = D.pipes[preSel.value];
+    pipeEl.value = p ? p.yaml : '';
+    update();
+  });
+  $('sg-clear').addEventListener('click', () => { ruleEl.value = ''; update(); ruleEl.focus(); });
+  function readFile(file) {
+    if (!file) return;
+    const fr = new FileReader();
+    fr.onload = () => { ruleEl.value = String(fr.result); update(); };
+    fr.readAsText(file);
+  }
+  $('sg-open').addEventListener('click', () => $('sg-file').click());
+  $('sg-file').addEventListener('change', ev => { readFile(ev.target.files[0]); ev.target.value = ''; });
+  ruleEl.addEventListener('dragover', ev => { ev.preventDefault(); ruleEl.classList.add('drop'); });
+  ruleEl.addEventListener('dragleave', () => ruleEl.classList.remove('drop'));
+  ruleEl.addEventListener('drop', ev => {
+    ev.preventDefault();
+    ruleEl.classList.remove('drop');
+    readFile(ev.dataTransfer.files[0]);
+  });
+
+  // ----- routing between the IOC builder and this view -----
+  const intro = $('intro');
+  const introOrig = intro.textContent;
+  const SG_INTRO = 'Paste or open Sigma rules and get Falcon NG-SIEM, Splunk, Elastic and KQL queries. Rules are parsed and converted in this page, and nothing is uploaded. The page blocks all network requests.';
+  const SG_TITLE = 'IOC query builder: Sigma';
+  let prevTitle = null;
+  function route() {
+    const cur = location.hash === '#sigma' ? 'sigma' : location.hash === '#splunk' ? 'splunk' : 'ngsiem';
+    const sg = cur === 'sigma';
+    iocMain.hidden = sg;
+    sgMain.hidden = !sg;
+    document.querySelectorAll('.platform a').forEach(a => {
+      if (a.dataset.plat === cur) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    intro.textContent = sg ? SG_INTRO : introOrig;
+    if (sg) {
+      if (prevTitle === null) prevTitle = document.title;
+      document.title = SG_TITLE;
+      fitAll();
+    } else if (prevTitle !== null) {
+      if (document.title === SG_TITLE) document.title = prevTitle;
+      prevTitle = null;
+    }
+  }
+  window.addEventListener('hashchange', route);
+
+  update();
+  route();
+})();
+
 })();
 </script>
 </body>
