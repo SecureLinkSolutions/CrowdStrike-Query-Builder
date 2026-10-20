@@ -483,8 +483,9 @@
         <summary>What this supports</summary>
         <div class="inner">
           <p class="hint">Selections as maps, lists of maps and keyword lists. Conditions with <code>and</code>, <code>or</code>, <code>not</code>, brackets, <code>1 of</code>, <code>all of</code> and <code>them</code>. Modifiers <code>contains</code>, <code>startswith</code>, <code>endswith</code>, <code>all</code>, <code>re</code>, <code>cidr</code>, <code>exists</code>, <code>cased</code>, <code>fieldref</code>, <code>gt</code>, <code>gte</code>, <code>lt</code>, <code>lte</code>, <code>base64</code>, <code>base64offset</code>, <code>wide</code>, <code>utf16le</code>, <code>utf16be</code>, <code>utf16</code> and <code>windash</code>.</p>
-          <p class="hint">Pipelines support <code>field_name_mapping</code>, <code>field_name_prefix</code>, <code>drop_detection_item</code> (with <code>fields</code>), <code>add_condition</code> and <code>set_state</code>, with <code>logsource</code> rule conditions. The presets are starting points, so check the field names against your own data.</p>
+          <p class="hint">Pipelines support <code>field_name_mapping</code>, <code>field_name_prefix</code>, <code>drop_detection_item</code> (with <code>fields</code>), <code>add_condition</code>, <code>set_state</code>, <code>replace_string</code> and <code>detection_item_failure</code>, with <code>logsource</code> rule conditions. The presets are starting points, so check the field names against your own data.</p>
           <p class="hint">Not supported: <code>count()</code> and <code>near</code> aggregations, correlation rules, <code>action: global</code> and <code>expand</code> placeholders. This is a JavaScript reimplementation, not pySigma itself, so test generated queries before deploying them.</p>
+          <p class="hint">Output rules were checked against the official SigmaHQ backends: <a href="https://github.com/SigmaHQ/pySigma-backend-splunk" target="_blank" rel="noopener noreferrer">pySigma-backend-splunk</a> and <a href="https://github.com/SigmaHQ/pySigma-backend-crowdstrike" target="_blank" rel="noopener noreferrer">pySigma-backend-crowdstrike</a>. The Falcon preset follows the crowdstrike pipeline. Known differences: LogScale regex dotall uses the <code>d</code> flag, <code>exists</code> and <code>fieldref</code> are extensions where those backends are not implemented, and keyword regexes omit the stray quotes the crowdstrike backend adds.</p>
         </div>
       </details>
     </section>
@@ -1880,14 +1881,34 @@ level: low
   pipes: {
     falcon: {
       label: 'CrowdStrike Falcon (LogScale)',
-      yaml: `name: Falcon LogScale
-# Starting point. Check field names against your own sensor data.
-# Image has no equivalent on NetworkConnectIP4, join on ContextProcessId and TargetProcessId for that.
+      yaml: String.raw`name: Falcon LogScale
+# Modelled on crowdstrike_falcon_pipeline in SigmaHQ/pySigma-backend-crowdstrike.
+# Replacement strings use JavaScript syntax, so $1 is the first capture group.
+# Inbound network rules (Initiated: false) need NetworkReceiveAcceptIP4 instead of NetworkConnectIP4.
+# Check field names against your own sensor data.
 transformations:
   - id: process_event
     type: add_condition
     conditions:
-      '#event_simpleName': ProcessRollup2
+      '#event_simpleName': [ProcessRollup2, SyntheticProcessRollup2]
+    rule_conditions:
+      - {type: logsource, category: process_creation}
+  - id: platform_windows
+    type: add_condition
+    conditions:
+      event_platform: Win
+    rule_conditions:
+      - {type: logsource, category: process_creation, product: windows}
+  - id: platform_linux
+    type: add_condition
+    conditions:
+      event_platform: Lin
+    rule_conditions:
+      - {type: logsource, category: process_creation, product: linux}
+  - id: process_unsupported
+    type: detection_item_failure
+    fields: [CurrentDirectory, imphash, md5, sha1, ParentCommandLine, FileVersion, Description, Product, Company, LogonGuid, ParentProcessGuid, ParentProcessId]
+    message: CrowdStrike Query Language does not support this field
     rule_conditions:
       - {type: logsource, category: process_creation}
   - id: process_fields
@@ -1896,13 +1917,48 @@ transformations:
       Image: ImageFileName
       ParentImage: ParentBaseFileName
       User: UserName
+      ProcessId: RawProcessId
+      sha256: SHA256HashData
       Computer: ComputerName
+      OriginalFileName: OriginalFilename
     rule_conditions:
       - {type: logsource, category: process_creation}
+  - id: parent_file_name_only
+    type: replace_string
+    fields: [ParentBaseFileName]
+    require_regex: '^\*\\?[^\\]+$'
+    require_message: Only the file name of the parent image is available in Falcon events
+    regex: '^\*\\([^\\]+)$'
+    replacement: '$1'
+  - id: image_device_path
+    type: replace_string
+    fields: [ImageFileName]
+    regex: '[C-Z]:'
+    replacement: '\Device\HarddiskVolume?'
+  - id: dns_event
+    type: add_condition
+    conditions:
+      '#event_simpleName': DnsRequest
+      event_platform: Win
+    rule_conditions:
+      - {type: logsource, category: dns_query}
+  - id: dns_fields
+    type: field_name_mapping
+    mapping:
+      QueryName: DomainName
+      record_type: RequestType
+      Image: ContextBaseFileName
+    rule_conditions:
+      - {type: logsource, category: dns_query}
   - id: network_event
     type: add_condition
     conditions:
       '#event_simpleName': NetworkConnectIP4
+    rule_conditions:
+      - {type: logsource, category: network_connection}
+  - id: network_drop_initiated
+    type: drop_detection_item
+    fields: [Initiated]
     rule_conditions:
       - {type: logsource, category: network_connection}
   - id: network_fields
@@ -1910,41 +1966,50 @@ transformations:
     mapping:
       DestinationIp: RemoteAddressIP4
       DestinationPort: RemotePort
-      SourceIp: LocalAddressIP4
+      Image: ContextBaseFileName
       SourcePort: LocalPort
     rule_conditions:
       - {type: logsource, category: network_connection}
+  - id: context_file_name_only
+    type: replace_string
+    fields: [ContextBaseFileName]
+    require_regex: '^\*\\?[^\\]+$'
+    require_message: Only the file name of the image is available in Falcon events
+    regex: '^\*\\([^\\]+)$'
+    replacement: '$1'
 `
     },
     splunk: {
       label: 'Splunk with Sysmon',
       yaml: `name: Splunk Sysmon
-# Starting point. Adjust the source value to match your inputs.
+# Modelled on splunk_windows_pipeline in SigmaHQ/pySigma-backend-splunk, which builds source values as WinEventLog:<channel>.
+# Many deployments use XmlWinEventLog: instead, so change the source value to match your inputs.
+# These conditions assume Sysmon is the source of the process and network events.
 transformations:
   - id: sysmon_process
     type: add_condition
     conditions:
-      source: 'XmlWinEventLog:Microsoft-Windows-Sysmon/Operational'
+      source: 'WinEventLog:Microsoft-Windows-Sysmon/Operational'
       EventCode: 1
     rule_conditions:
-      - {type: logsource, category: process_creation}
+      - {type: logsource, category: process_creation, product: windows}
   - id: sysmon_network
     type: add_condition
     conditions:
-      source: 'XmlWinEventLog:Microsoft-Windows-Sysmon/Operational'
+      source: 'WinEventLog:Microsoft-Windows-Sysmon/Operational'
       EventCode: 3
     rule_conditions:
-      - {type: logsource, category: network_connection}
-  - id: host_field
+      - {type: logsource, category: network_connection, product: windows}
+  - id: event_id
     type: field_name_mapping
     mapping:
-      Computer: host
+      EventID: EventCode
 `
     },
     ecs: {
       label: 'Elastic ECS',
       yaml: `name: Elastic ECS
-# Starting point for ECS style field names.
+# Starting point for ECS style field names. Not taken from a SigmaHQ repository, so check it before use.
 transformations:
   - id: process_fields
     type: field_name_mapping
@@ -1973,7 +2038,7 @@ transformations:
     defender: {
       label: 'Defender for Endpoint',
       yaml: `name: Defender for Endpoint
-# Starting point. set_state picks the table used by the KQL output.
+# Starting point. set_state picks the table used by the KQL output. Not taken from a SigmaHQ repository, so check it before use.
 transformations:
   - id: process_table
     type: set_state
@@ -2054,6 +2119,10 @@ const Sigma = (function () {
     }
     out.push(buf);
     return norm(out);
+  }
+
+  function fromPlain(r) {
+    return norm(r.split(/([*?])/).map(s => (s === '*' || s === '?' ? W(s) : s)));
   }
 
   function plainText(a) {
@@ -2293,7 +2362,7 @@ const Sigma = (function () {
   const some = (n, p) => (n.t === 'and' || n.t === 'or' ? n.c.some(c => some(c, p)) : n.t === 'not' ? some(n.c, p) : p(n));
 
   // ---------- processing pipelines ----------
-  const PIPE_TYPES = ['field_name_mapping', 'field_name_prefix', 'drop_detection_item', 'add_condition', 'set_state'];
+  const PIPE_TYPES = ['field_name_mapping', 'field_name_prefix', 'drop_detection_item', 'detection_item_failure', 'replace_string', 'add_condition', 'set_state'];
 
   function parsePipeline(text) {
     if (!text || !text.trim()) return null;
@@ -2368,6 +2437,27 @@ const Sigma = (function () {
           }
           break;
         }
+        case 'detection_item_failure': {
+          const fields = t.fields || [];
+          mapNode(n, l => {
+            if (l.f && fields.includes(l.f)) throw new SigmaError(`${t.message || 'This field is not supported'}: ${l.f}`);
+            return l;
+          });
+          break;
+        }
+        case 'replace_string': {
+          const re = new RegExp(t.regex, 'g');
+          const need = t.require_regex ? new RegExp(t.require_regex) : null;
+          const fields = t.fields || null;
+          n = mapNode(n, l => {
+            if (l.t !== 'str' || !l.f || (fields && !fields.includes(l.f))) return l;
+            const text = strText(l.v);
+            if (need && !need.test(text)) throw new SigmaError(`${t.require_message || 'Unsupported value'} (${l.f}: ${text})`);
+            const r = text.replace(re, t.replacement === undefined ? '' : String(t.replacement));
+            return r === text ? l : { ...l, v: fromPlain(r) };
+          });
+          break;
+        }
         case 'set_state':
           state[t.key] = t.val;
           break;
@@ -2429,6 +2519,9 @@ const Sigma = (function () {
   const dq = s => '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
 
   function runSplunk(ast, ctx) {
+    // pySigma quotes field names that are not plain word characters or dots
+    const fq = f => (/^[\w.]+$/.test(f) ? f : dq(f));
+    const sq = f => "'" + f.replace(/'/g, "\\'") + "'";
     const val = arr => {
       if (arr.some(t => isW(t) && t.w === '?')) ctx.warn('Splunk search has no single character wildcard, so ? was turned into *.');
       return arr.map(t => (isW(t) ? '*' : t)).join('');
@@ -2436,12 +2529,12 @@ const Sigma = (function () {
     const B = {
       ops: { and: 'AND', or: 'OR' },
       not: s => 'NOT ' + s,
-      collapse: (kids, rec) => collapseOr(kids, rec, k => k.t === 'str' && k.f && !k.cs, (f, g) => `${f} IN (${g.map(x => dq(val(x.v))).join(', ')})`),
+      collapse: (kids, rec) => collapseOr(kids, rec, k => k.t === 'str' && k.f && !k.cs, (f, g) => `${fq(f)} IN (${g.map(x => dq(val(x.v))).join(', ')})`),
       leaf(n) {
-        const f = n.f;
+        const f = n.f && fq(n.f);
         switch (n.t) {
           case 'str':
-            if (n.cs) ctx.warn('Splunk search ignores case, so the cased modifier is not enforced.');
+            if (n.cs) ctx.warn('Splunk search ignores case, so the cased modifier is not enforced. pySigma refuses cased matching for Splunk.');
             return f ? `${f}=${dq(val(n.v))}` : dq(val(n.v));
           case 'num': case 'bool': return `${f}=${n.v}`;
           case 'null': return `NOT ${f}=*`;
@@ -2453,16 +2546,19 @@ const Sigma = (function () {
       }
     };
     const hard = n => some(n, x => x.t === 're' || x.t === 'ref');
+    // Regex and field comparisons in the top level AND chain become pipeline stages, as in the pySigma Splunk backend
     const kids = ast.t === 'and' ? ast.c : [ast];
-    const rx = [];
+    const stages = [];
     const keep = [];
     for (const k of kids) {
-      if (k.t === 're') rx.push([k, false]);
-      else if (k.t === 'not' && k.c.t === 're') rx.push([k.c, true]);
+      const neg = k.t === 'not';
+      const c = neg ? k.c : k;
+      if (c.t === 're') stages.push(`regex ${c.f}${neg ? '!=' : '='}${dq(reFlags(c.flags) + c.v)}`);
+      else if (c.t === 'ref') stages.push(`where ${neg ? 'NOT ' : ''}${sq(c.f)}=${sq(c.v)}`);
       else keep.push(k);
     }
     if (keep.some(hard)) {
-      const wf = f => (/^[A-Za-z_]\w*$/.test(f) ? f : "'" + f.replace(/'/g, "\\'") + "'");
+      const wf = f => (/^[A-Za-z_]\w*$/.test(f) ? f : sq(f));
       const WB = {
         ops: { and: 'AND', or: 'OR' },
         not: s => 'NOT ' + s,
@@ -2484,17 +2580,18 @@ const Sigma = (function () {
           throw new SigmaError('Internal error: unexpected node in Splunk where mode');
         }
       };
-      ctx.warn('This rule has a regex inside an OR or a field comparison, so it is written as a where expression. Add an index or sourcetype to the left of the pipe to keep it fast.');
+      ctx.warn('This rule has a regex inside an OR or a field comparison inside an OR, so it is written as a where expression. pySigma uses rex and eval for the regex case. Add an index or sourcetype to the left of the pipe to keep it fast.');
       return `* | where ${emit(ast, WB, null)}`;
     }
     const search = keep.length ? emit(keep.length > 1 ? { t: 'and', c: keep } : keep[0], B, null) : '*';
-    const suffix = rx.map(([n, neg]) => `\n| regex ${n.f}${neg ? '!=' : '='}${dq(reFlags(n.flags) + n.v)}`).join('');
-    return search + suffix;
+    return search + stages.map(s => '\n| ' + s).join('');
   }
 
   function runLogScale(ast, ctx) {
     const style = ctx.opts.lsStyle || 'regex';
-    const fld = f => (/^[#@\w.\-:]+$/.test(f) ? f : dq(f));
+    // pySigma quotes every field name that is not [@#]word characters and dots, because a hyphen is read as subtraction
+    const bareOk = f => /^[@#]?[\w.]+$/.test(f);
+    const fld = f => (bareOk(f) ? f : dq(f));
     const flagsLS = f => (f.i ? 'i' : '') + (f.m ? 'm' : '') + (f.s ? 'd' : '');
     const wild = a => {
       if (a.some(t => isW(t) && t.w === '?')) ctx.warn('LogScale wildcards only support *, so ? was turned into *.');
@@ -2520,17 +2617,35 @@ const Sigma = (function () {
             return `${f}=/${globRegex(n.v, true)}/${n.cs ? '' : 'i'}`;
           }
           case 'num': case 'bool': return `${f}=${n.v}`;
-          case 'null': return `not ${f}=*`;
-          case 'exists': return n.v ? `${f}=*` : `not ${f}=*`;
+          case 'null': return `${f}!=*`;
+          case 'exists': return n.v ? `${f}=*` : `${f}!=*`;
           case 're': return `${f}=/${n.v.replace(/(?<!\\)\//g, '\\/')}/${flagsLS(n.flags)}`;
-          case 'cidr': return `cidr(${f}, subnet=${dq(n.v)})`;
           case 'cmp': return `${f}${n.op}${n.v}`;
-          case 'ref': return `test(${f}==${fld(n.v)})`;
+          case 'ref':
+            if (!bareOk(n.f) || !bareOk(n.v)) throw new SigmaError('A field reference to a field name with a hyphen or other special character cannot be written as an NG-SIEM test() expression here');
+            return `test(${n.f}==${n.v})`;
         }
         throw new SigmaError('Internal error: unexpected node in LogScale backend');
       }
     };
-    return emit(ast, B, null);
+    // CIDR matching runs as pipeline stages after the filter, as in the pySigma LogScale backend.
+    // A negated OR of ranges is split into one negated stage per range.
+    const stage = (c, neg) => `${neg ? '!' : ''}cidr(${fld(c.f)}, subnet=${dq(c.v)})`;
+    const kids = ast.t === 'and' ? ast.c : [ast];
+    const stages = [];
+    const keep = [];
+    for (const k of kids) {
+      if (k.t === 'cidr') stages.push(stage(k, false));
+      else if (k.t === 'not' && k.c.t === 'cidr') stages.push(stage(k.c, true));
+      else if (k.t === 'not' && k.c.t === 'or' && k.c.c.every(x => x.t === 'cidr')) k.c.c.forEach(x => stages.push(stage(x, true)));
+      else keep.push(k);
+    }
+    if (keep.some(k => some(k, x => x.t === 'cidr'))) {
+      throw new SigmaError('ORing CIDR matching is not supported for NG-SIEM, the same limit as the pySigma LogScale backend. Split the rule into one rule per range or use a lookup file');
+    }
+    const main = keep.length ? emit(keep.length > 1 ? { t: 'and', c: keep } : keep[0], B, null) : '';
+    if (!main) return stages.join('\n| ');
+    return main + stages.map(s => '\n| ' + s).join('');
   }
 
   function runLucene(ast, ctx) {
